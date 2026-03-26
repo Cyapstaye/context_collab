@@ -1,0 +1,14 @@
+node_modules
+dist/
+apps/web/dist/
+packages/shared/dist/
+apps/server/dist/
+.env
+.env.local
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+.DS_Store
+.turbo
+coverage

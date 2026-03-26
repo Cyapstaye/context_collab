@@ -1,0 +1,95 @@
+// Prisma schema for context-collab
+// SQLite for local dev; swap provider + DATABASE_URL for Postgres at deploy time.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // bcrypt hash
+  role      String   @default("editor") // "admin" | "editor" | "viewer"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pages Page[]
+}
+
+// ─── Pages ────────────────────────────────────────────────────────────────────
+
+model Page {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  labelsJson  String   @default("[]") // JSON array of label strings
+  activeView  String   @default("element") // element | proposition | layer | axis3d
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  nodes   Node[]
+  edges   Edge[]
+
+  @@index([projectId])
+}
+
+// ─── Nodes ────────────────────────────────────────────────────────────────────
+
+model Node {
+  id            String   @id @default(cuid())
+  pageId        String
+  type          String   // "element" | "proposition"
+  name          String
+  labelsJson    String   @default("[]") // JSON array of label strings
+  size          Float    @default(1.0)
+  positionsJson String   @default("{}") // JSON NodePositions
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  page          Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  sourceEdges   Edge[] @relation("SourceNode")
+  targetEdges   Edge[] @relation("TargetNode")
+
+  @@index([pageId])
+  @@index([pageId, type])
+}
+
+// ─── Edges ────────────────────────────────────────────────────────────────────
+
+model Edge {
+  id        String   @id @default(cuid())
+  pageId    String
+  source    String   // Node id
+  target    String   // Node id
+  weight    Float    @default(0.5)
+  relation  String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  page       Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  sourceNode Node @relation("SourceNode", fields: [source], references: [id], onDelete: Cascade)
+  targetNode Node @relation("TargetNode", fields: [target], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+  @@index([source])
+  @@index([target])
+}
