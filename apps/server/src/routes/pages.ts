@@ -182,10 +182,12 @@ pagesRouter.get('/:id/export', async (req: Request, res: Response) => {
       prisma.edge.findMany({ where: { pageId: id }, orderBy: { createdAt: 'asc' } }),
     ]);
     res.json({
-      version: 1,
-      page: mapPage(page),
-      nodes: nodes.map(mapNode),
-      edges: edges.map(mapEdge),
+      data: {
+        version: 1,
+        page: mapPage(page),
+        nodes: nodes.map(mapNode),
+        edges: edges.map(mapEdge),
+      },
     });
   } catch (err) {
     console.error(err);

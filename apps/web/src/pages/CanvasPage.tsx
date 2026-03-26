@@ -13,10 +13,10 @@ export default function CanvasPage() {
   const loadError = useCanvasStore((s) => s.loadError);
 
   useEffect(() => {
-    if (pageId) {
-      loadPage(pageId);
+    if (projectId && pageId) {
+      loadPage(projectId, pageId);
     }
-  }, [pageId, loadPage]);
+  }, [projectId, pageId, loadPage]);
 
   if (loading) {
     return (

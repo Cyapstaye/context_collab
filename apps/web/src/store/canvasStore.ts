@@ -21,6 +21,10 @@ export interface CanvasEdge {
 
 interface CanvasStore {
   pageId: string | null;
+  projectId: string | null;
+  pageName: string | null;
+  pageLabels: string[];
+  pageRelations: string[];
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   activeView: ViewName;
@@ -28,8 +32,10 @@ interface CanvasStore {
   selectedEdgeId: string | null;
   loading: boolean;
   loadError: string | null;
+  mutationError: string | null;
 
-  loadPage: (pageId: string) => Promise<void>;
+  loadPage: (projectId: string, pageId: string) => Promise<void>;
+  clearMutationError: () => void;
 
   addNode: (type: NodeType, name: string, position?: { x: number; y: number }) => Promise<void>;
   updateNodePosition: (id: string, view: ViewName, pos: { x: number; y: number }) => void;
@@ -46,6 +52,18 @@ interface CanvasStore {
   setSelectedNode: (id: string | null) => void;
   setSelectedEdge: (id: string | null) => void;
   selectNodeFromSidebar: (id: string) => void;
+}
+
+// Module-level debounce timer map — keyed by "<field>:<id>"
+const _debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function debounce(key: string, ms: number, fn: () => void): void {
+  const existing = _debounceTimers.get(key);
+  if (existing !== undefined) clearTimeout(existing);
+  _debounceTimers.set(key, setTimeout(() => {
+    _debounceTimers.delete(key);
+    fn();
+  }, ms));
 }
 
 const defaultPositions = (): NodePositions => ({
@@ -73,6 +91,10 @@ function buildInitialPositions(
 
 export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   pageId: null,
+  projectId: null,
+  pageName: null,
+  pageLabels: [],
+  pageRelations: [],
   nodes: [],
   edges: [],
   activeView: 'element',
@@ -80,23 +102,32 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   selectedEdgeId: null,
   loading: false,
   loadError: null,
+  mutationError: null,
 
-  loadPage: async (pageId: string) => {
+  loadPage: async (projectId: string, pageId: string) => {
     set({
       pageId,
+      projectId,
       nodes: [],
       edges: [],
       loading: true,
       loadError: null,
       selectedNodeId: null,
       selectedEdgeId: null,
+      pageName: null,
+      pageLabels: [],
+      pageRelations: [],
     });
     try {
-      const [nodesRes, edgesRes] = await Promise.all([
+      const [pageRes, nodesRes, edgesRes] = await Promise.all([
+        api.getPage(projectId, pageId),
         api.listNodes(pageId),
         api.listEdges(pageId),
       ]);
       set({
+        pageName: pageRes.data.name,
+        pageLabels: pageRes.data.labels,
+        pageRelations: pageRes.data.relations,
         nodes: nodesRes.data.map((n) => ({
           id: n.id,
           type: n.type,
@@ -120,6 +151,8 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
     }
   },
 
+  clearMutationError: () => set({ mutationError: null }),
+
   addNode: async (type, name, position?) => {
     const { pageId, nodes } = get();
     if (!pageId) return;
@@ -141,56 +174,89 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
         selectedEdgeId: null,
       }));
     } catch (err) {
-      console.error('Failed to add node:', err);
+      const msg = err instanceof Error ? err.message : '노드 추가 실패';
+      set({ mutationError: msg });
     }
   },
 
   updateNodePosition: (id, view, pos) => {
-    // Update local state synchronously for immediate visual feedback
+    // Compute merged positions once — used for both local state and API call
+    const { pageId, nodes } = get();
+    const node = nodes.find((n) => n.id === id);
+    if (!node) return;
+    const mergedPositions: NodePositions = { ...node.positions, [view]: pos };
     set((s) => ({
       nodes: s.nodes.map((n) =>
-        n.id === id ? { ...n, positions: { ...n.positions, [view]: pos } } : n,
+        n.id === id ? { ...n, positions: mergedPositions } : n,
       ),
     }));
-    // Persist to API in background
-    const { pageId } = get();
     if (!pageId) return;
-    const node = get().nodes.find((n) => n.id === id);
-    if (node) {
-      api.updateNode(pageId, id, { positions: node.positions }).catch(console.error);
-    }
+    // Debounce position API calls to batch rapid drag events
+    debounce(`node-pos:${id}`, 100, () => {
+      api.updateNode(pageId, id, { positions: mergedPositions }).catch((err) => {
+        const msg = err instanceof Error ? err.message : '위치 저장 실패';
+        set({ mutationError: msg });
+      });
+    });
   },
 
   updateNodeName: (id, name) => {
+    const prev = get().nodes.find((n) => n.id === id);
+    if (!prev) return;
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, name } : n)),
     }));
     const { pageId } = get();
-    if (pageId) {
-      api.updateNode(pageId, id, { name }).catch(console.error);
-    }
+    if (!pageId) return;
+    debounce(`node-name:${id}`, 300, () => {
+      api.updateNode(pageId, id, { name }).catch((err) => {
+        set((s) => ({
+          nodes: s.nodes.map((n) => (n.id === id ? { ...n, name: prev.name } : n)),
+          mutationError: err instanceof Error ? err.message : '이름 저장 실패',
+        }));
+      });
+    });
   },
 
   updateNodeSize: (id, size) => {
+    const prev = get().nodes.find((n) => n.id === id);
+    if (!prev) return;
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, size } : n)),
     }));
     const { pageId } = get();
-    if (pageId) {
-      api.updateNode(pageId, id, { size }).catch(console.error);
-    }
+    if (!pageId) return;
+    debounce(`node-size:${id}`, 400, () => {
+      api.updateNode(pageId, id, { size }).catch((err) => {
+        set((s) => ({
+          nodes: s.nodes.map((n) => (n.id === id ? { ...n, size: prev.size } : n)),
+          mutationError: err instanceof Error ? err.message : '크기 저장 실패',
+        }));
+      });
+    });
   },
 
   deleteNode: async (id) => {
-    // Optimistic delete from local state
+    const { pageId } = get();
+    const prevNodes = get().nodes;
+    const prevEdges = get().edges;
+    const prevSelected = get().selectedNodeId;
+    // Optimistic delete
     set((s) => ({
       nodes: s.nodes.filter((n) => n.id !== id),
       edges: s.edges.filter((e) => e.source !== id && e.target !== id),
       selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
     }));
-    const { pageId } = get();
-    if (pageId) {
-      api.deleteNode(pageId, id).catch(console.error);
+    if (!pageId) return;
+    try {
+      await api.deleteNode(pageId, id);
+    } catch (err) {
+      set({
+        nodes: prevNodes,
+        edges: prevEdges,
+        selectedNodeId: prevSelected,
+        mutationError: err instanceof Error ? err.message : '노드 삭제 실패',
+      });
     }
   },
 
@@ -219,39 +285,65 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
         selectedNodeId: null,
       }));
     } catch (err) {
-      console.error('Failed to add edge:', err);
+      const msg = err instanceof Error ? err.message : '엣지 추가 실패';
+      set({ mutationError: msg });
     }
   },
 
   deleteEdge: async (id) => {
+    const { pageId } = get();
+    const prevEdges = get().edges;
+    const prevSelected = get().selectedEdgeId;
     set((s) => ({
       edges: s.edges.filter((e) => e.id !== id),
       selectedEdgeId: s.selectedEdgeId === id ? null : s.selectedEdgeId,
     }));
-    const { pageId } = get();
-    if (pageId) {
-      api.deleteEdge(pageId, id).catch(console.error);
+    if (!pageId) return;
+    try {
+      await api.deleteEdge(pageId, id);
+    } catch (err) {
+      set({
+        edges: prevEdges,
+        selectedEdgeId: prevSelected,
+        mutationError: err instanceof Error ? err.message : '엣지 삭제 실패',
+      });
     }
   },
 
   updateEdgeWeight: (id, weight) => {
+    const prev = get().edges.find((e) => e.id === id);
+    if (!prev) return;
     set((s) => ({
       edges: s.edges.map((e) => (e.id === id ? { ...e, weight } : e)),
     }));
     const { pageId } = get();
-    if (pageId) {
-      api.updateEdge(pageId, id, { weight }).catch(console.error);
-    }
+    if (!pageId) return;
+    debounce(`edge-weight:${id}`, 400, () => {
+      api.updateEdge(pageId, id, { weight }).catch((err) => {
+        set((s) => ({
+          edges: s.edges.map((e) => (e.id === id ? { ...e, weight: prev.weight } : e)),
+          mutationError: err instanceof Error ? err.message : '가중치 저장 실패',
+        }));
+      });
+    });
   },
 
   updateEdgeRelation: (id, relation) => {
+    const prev = get().edges.find((e) => e.id === id);
+    if (!prev) return;
     set((s) => ({
       edges: s.edges.map((e) => (e.id === id ? { ...e, relation } : e)),
     }));
     const { pageId } = get();
-    if (pageId) {
-      api.updateEdge(pageId, id, { relation }).catch(console.error);
-    }
+    if (!pageId) return;
+    debounce(`edge-relation:${id}`, 300, () => {
+      api.updateEdge(pageId, id, { relation }).catch((err) => {
+        set((s) => ({
+          edges: s.edges.map((e) => (e.id === id ? { ...e, relation: prev.relation } : e)),
+          mutationError: err instanceof Error ? err.message : '관계 저장 실패',
+        }));
+      });
+    });
   },
 
   setActiveView: (view) => {

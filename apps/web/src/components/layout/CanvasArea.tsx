@@ -8,6 +8,8 @@ const VIEWS: ViewName[] = ['element', 'proposition', 'layer'];
 export default function CanvasArea() {
   const activeView = useCanvasStore((s) => s.activeView);
   const setActiveView = useCanvasStore((s) => s.setActiveView);
+  const mutationError = useCanvasStore((s) => s.mutationError);
+  const clearMutationError = useCanvasStore((s) => s.clearMutationError);
 
   return (
     <main className="relative flex h-full flex-1 flex-col overflow-hidden">
@@ -40,6 +42,20 @@ export default function CanvasArea() {
       <div className="flex-1 overflow-hidden">
         <FlowCanvas activeView={activeView} />
       </div>
+
+      {/* Mutation error toast */}
+      {mutationError && (
+        <div className="absolute bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 shadow">
+          <span>{mutationError}</span>
+          <button
+            onClick={clearMutationError}
+            className="ml-1 text-red-400 hover:text-red-600"
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </main>
   );
 }

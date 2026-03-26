@@ -42,6 +42,16 @@ edgesRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
   try {
+    // Validate that source and target nodes both belong to this page
+    const [sourceNode, targetNode] = await Promise.all([
+      prisma.node.findFirst({ where: { id: parsed.data.source, pageId: req.params.pageId } }),
+      prisma.node.findFirst({ where: { id: parsed.data.target, pageId: req.params.pageId } }),
+    ]);
+    if (!sourceNode || !targetNode) {
+      res.status(400).json({ error: 'Bad Request', message: 'Source or target node does not belong to this page', statusCode: 400 });
+      return;
+    }
+
     // Prevent duplicate edges (bidirectional check)
     const existing = await prisma.edge.findFirst({
       where: {
