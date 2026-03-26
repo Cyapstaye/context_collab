@@ -37,6 +37,9 @@ interface CanvasStore {
   setActiveView: (view: ViewName) => void;
   setSelectedNode: (id: string | null) => void;
   setSelectedEdge: (id: string | null) => void;
+  // Selects a node from the sidebar, auto-switching the macro view if the node's
+  // type is hidden in the current view.
+  selectNodeFromSidebar: (id: string) => void;
 }
 
 let nodeCounter = 1;
@@ -64,23 +67,29 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
   selectedEdgeId: null,
 
   addNode: (type, name, position) => {
-    const id = nextNodeId();
-    const pos = position ?? { x: 100 + Math.random() * 300, y: 100 + Math.random() * 200 };
-    const positions = defaultPositions();
-    positions[type === 'element' ? 'element' : 'proposition'] = pos;
-    // Also set layer position for elements
-    if (type === 'element') {
-      positions.layer = { ...pos };
-    }
-    const node: CanvasNode = {
-      id,
-      type,
-      name,
-      labels: [],
-      size: 1.0,
-      positions,
-    };
-    set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: id, selectedEdgeId: null }));
+    set((s) => {
+      const id = nextNodeId();
+      // Deterministic grid layout: 6 columns, 200px × 160px cells
+      const idx = s.nodes.filter((n) => n.type === type).length;
+      const col = idx % 6;
+      const row = Math.floor(idx / 6);
+      const pos = position ?? { x: 120 + col * 200, y: 100 + row * 160 };
+      const positions = defaultPositions();
+      positions[type === 'element' ? 'element' : 'proposition'] = pos;
+      // Initialise layer position for elements so layer view never needs a fallback
+      if (type === 'element') {
+        positions.layer = { ...pos };
+      }
+      const node: CanvasNode = {
+        id,
+        type,
+        name,
+        labels: [],
+        size: 1.0,
+        positions,
+      };
+      return { nodes: [...s.nodes, node], selectedNodeId: id, selectedEdgeId: null };
+    });
   },
 
   updateNodePosition: (id, view, pos) => {
@@ -161,5 +170,27 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
 
   setSelectedEdge: (id) => {
     set({ selectedEdgeId: id, selectedNodeId: null });
+  },
+
+  selectNodeFromSidebar: (id) => {
+    set((s) => {
+      const node = s.nodes.find((n) => n.id === id);
+      if (!node) return { selectedNodeId: id, selectedEdgeId: null };
+
+      // Determine whether the node type is visible in the current view.
+      // element/layer views show elements; proposition view shows propositions.
+      const visibleInCurrentView =
+        s.activeView === 'proposition'
+          ? node.type === 'proposition'
+          : node.type === 'element';
+
+      if (visibleInCurrentView) {
+        return { selectedNodeId: id, selectedEdgeId: null };
+      }
+
+      // Switch to the default macro view for this node type, then select it.
+      const targetView: ViewName = node.type === 'proposition' ? 'proposition' : 'element';
+      return { activeView: targetView, selectedNodeId: id, selectedEdgeId: null };
+    });
   },
 }));

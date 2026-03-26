@@ -82,7 +82,13 @@ export default function FlowCanvas({ activeView }: Props) {
     return storeNodes
       .filter((n) => visibleNodeTypes.includes(n.type as 'element' | 'proposition'))
       .map((n) => {
-        const pos = n.positions[activeView] ?? { x: 150 + Math.random() * 300, y: 150 + Math.random() * 200 };
+        // Store guarantees all relevant view positions are initialised at add-time.
+        // The fallback chain handles any legacy nodes that predate that guarantee.
+        const pos =
+          n.positions[activeView] ??
+          n.positions.element ??
+          n.positions.proposition ??
+          { x: 0, y: 0 };
         const dimmed = connectedIds !== null && !connectedIds.has(n.id);
         const data: NodeData = { name: n.name, size: n.size, dimmed };
         return {
@@ -121,6 +127,12 @@ export default function FlowCanvas({ activeView }: Props) {
     .map((n) => `${n.id}:${n.name}:${n.size}`)
     .join('|');
 
+  // Include edge data (weight + relation) so style/label changes trigger a resync,
+  // not just structural add/remove tracked by length alone.
+  const edgeDataKey = storeEdges
+    .map((e) => `${e.id}:${e.weight}:${e.relation}`)
+    .join('|');
+
   // Resync when view changes or when node set changes (add/remove/rename/resize)
   // Using a layout effect to avoid one-frame flicker
   useEffect(() => {
@@ -131,7 +143,7 @@ export default function FlowCanvas({ activeView }: Props) {
   useEffect(() => {
     setEdges(derivedEdges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeEdges.length, activeView]);
+  }, [edgeDataKey, activeView]);
 
   // Sync selection state into RF nodes without full resync
   useEffect(() => {

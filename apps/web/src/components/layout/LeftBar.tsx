@@ -19,7 +19,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
   const nodes = useCanvasStore((s) => s.nodes);
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
   const addNode = useCanvasStore((s) => s.addNode);
-  const setSelectedNode = useCanvasStore((s) => s.setSelectedNode);
+  const selectNodeFromSidebar = useCanvasStore((s) => s.selectNodeFromSidebar);
 
   const [form, setForm] = useState<AddFormState>(CLOSED);
 
@@ -103,7 +103,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
               {elements.map((n) => (
                 <li
                   key={n.id}
-                  onClick={() => setSelectedNode(n.id)}
+                  onClick={() => selectNodeFromSidebar(n.id)}
                   className={[
                     'truncate rounded px-2 py-1 text-xs cursor-pointer',
                     selectedNodeId === n.id
@@ -162,7 +162,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
               {propositions.map((n) => (
                 <li
                   key={n.id}
-                  onClick={() => setSelectedNode(n.id)}
+                  onClick={() => selectNodeFromSidebar(n.id)}
                   className={[
                     'truncate rounded px-2 py-1 text-xs cursor-pointer',
                     selectedNodeId === n.id
