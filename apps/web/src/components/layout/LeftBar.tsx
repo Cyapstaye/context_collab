@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCanvasStore } from '../../store/canvasStore';
 import type { NodeType } from '@context-collab/shared';
 
@@ -16,12 +17,33 @@ interface AddFormState {
 const CLOSED: AddFormState = { open: false, type: 'element', name: '' };
 
 export default function LeftBar({ projectId, pageId }: Props) {
+  const navigate = useNavigate();
   const nodes = useCanvasStore((s) => s.nodes);
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
   const addNode = useCanvasStore((s) => s.addNode);
   const selectNodeFromSidebar = useCanvasStore((s) => s.selectNodeFromSidebar);
 
   const [form, setForm] = useState<AddFormState>(CLOSED);
+  const [projectName, setProjectName] = useState<string>('');
+  const [pageName, setPageName] = useState<string>('');
+
+  // Fetch project name
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/v1/projects/${projectId}`)
+      .then((r) => r.json())
+      .then((data) => { if (data.data?.name) setProjectName(data.data.name); })
+      .catch(() => setProjectName(projectId));
+  }, [projectId]);
+
+  // Fetch page name
+  useEffect(() => {
+    if (!projectId || !pageId) return;
+    fetch(`/api/v1/projects/${projectId}/pages/${pageId}`)
+      .then((r) => r.json())
+      .then((data) => { if (data.data?.name) setPageName(data.data.name); })
+      .catch(() => setPageName(pageId));
+  }, [projectId, pageId]);
 
   const elements = nodes.filter((n) => n.type === 'element');
   const propositions = nodes.filter((n) => n.type === 'proposition');
@@ -46,14 +68,21 @@ export default function LeftBar({ projectId, pageId }: Props) {
     <aside className="flex h-full w-60 flex-shrink-0 flex-col border-r border-border bg-panel">
       {/* Project name */}
       <div className="border-b border-border px-4 py-3">
-        <p className="text-xs text-gray-400">프로젝트</p>
-        <h2 className="mt-0.5 truncate text-sm font-semibold text-gray-800">{projectId || '—'}</h2>
+        <button
+          onClick={() => navigate(`/projects/${projectId}`)}
+          className="text-xs text-gray-400 hover:text-gray-600 mb-0.5 block text-left"
+        >
+          ← 프로젝트
+        </button>
+        <h2 className="truncate text-sm font-semibold text-gray-800">
+          {projectName || projectId || '—'}
+        </h2>
       </div>
 
       {/* Page */}
       <div className="border-b border-border px-4 py-3">
         <p className="text-xs font-medium text-gray-500">페이지</p>
-        <p className="mt-1 text-xs text-gray-400">현재: {pageId || '—'}</p>
+        <p className="mt-0.5 truncate text-xs text-gray-600">{pageName || pageId || '—'}</p>
       </div>
 
       {/* Nodes list */}
