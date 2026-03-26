@@ -39,9 +39,9 @@ model Page {
   id          String   @id @default(cuid())
   projectId   String
   name        String
-  labelsJson  String   @default("[]") // JSON array of label strings
-  activeView  String   @default("element") // element | proposition | layer | axis3d
-  order       Int      @default(0)
+  labelsJson    String   @default("[]") // JSON array of label strings
+  relationsJson String   @default("[]") // JSON array of relation strings (page-level pool)
+  order         Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

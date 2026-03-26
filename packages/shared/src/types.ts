@@ -38,8 +38,8 @@ export interface Page {
   id: string;
   projectId: string;
   name: string;
-  labels: string[]; // page-level label pool
-  activeView: ViewName;
+  labels: string[];    // page-level label pool
+  relations: string[]; // page-level relation pool (used on edges)
   order: number;
   createdAt: string;
   updatedAt: string;

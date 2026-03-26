@@ -20,7 +20,7 @@ Korean-first UI. Built with React + Vite, Express, Prisma/SQLite, Socket.io (Pha
 pnpm install
 
 # 2. Set up the database
-cp apps/server/.env apps/server/.env   # already exists with defaults
+#    apps/server/.env already exists with defaults (DATABASE_URL=file:./prisma/dev.db)
 pnpm db:migrate                        # creates dev.db and runs migrations
 pnpm db:generate                       # generates Prisma client
 
@@ -52,7 +52,7 @@ pnpm --filter web dev
 # Prisma Studio (DB browser)
 pnpm db:studio
 
-# Seed an allowlist user (Phase 5)
+# Seed an allowlist user — Phase 5 placeholder (auth not yet implemented)
 pnpm seed:user -- --email=user@example.com --password=secret
 ```
 

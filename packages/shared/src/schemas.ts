@@ -6,6 +6,8 @@ export const NodeTypeSchema = z.enum(['element', 'proposition']);
 
 export const ViewNameSchema = z.enum(['element', 'proposition', 'layer', 'axis3d']);
 
+// NodePositionsSchema is used server-side to parse/validate the positionsJson
+// string column on Node before returning typed data to clients.
 export const NodePositionsSchema = z.object({
   element: z.object({ x: z.number(), y: z.number() }).nullable(),
   proposition: z.object({ x: z.number(), y: z.number() }).nullable(),
@@ -79,7 +81,7 @@ export const PageSchema = z.object({
   projectId: z.string(),
   name: z.string().min(1),
   labels: z.array(z.string()),
-  activeView: ViewNameSchema,
+  relations: z.array(z.string()), // page-level relation pool (used on edges)
   order: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -92,7 +94,7 @@ export const CreatePageSchema = z.object({
 export const UpdatePageSchema = z.object({
   name: z.string().min(1).optional(),
   labels: z.array(z.string()).optional(),
-  activeView: ViewNameSchema.optional(),
+  relations: z.array(z.string()).optional(),
 });
 
 // ─── Project ──────────────────────────────────────────────────────────────────
