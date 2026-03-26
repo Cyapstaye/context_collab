@@ -9,7 +9,7 @@ export default function CanvasPage() {
   return (
     <div className="flex h-full w-full overflow-hidden bg-canvas">
       <LeftBar projectId={projectId ?? ''} pageId={pageId ?? ''} />
-      <CanvasArea pageId={pageId ?? ''} />
+      <CanvasArea />
       <RightBar />
     </div>
   );
