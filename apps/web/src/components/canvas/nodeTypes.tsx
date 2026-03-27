@@ -6,6 +6,7 @@ export type NodeData = {
   name: string;
   size: number;
   dimmed?: boolean;
+  crossType?: boolean;  // True when shown as context in a different view (detail view mix)
   lockedBy?: string;    // userId of lock holder (only set when locked by another user)
   lockedColor?: string; // display color of the lock holder
 };
@@ -17,7 +18,7 @@ export const ElementNode = memo(function ElementNode({
 }: NodeProps) {
   const d = data as NodeData;
   const diameter = Math.round(40 + d.size * 20);
-  const opacity = d.dimmed ? 0.2 : 1;
+  const opacity = d.dimmed ? 0.2 : d.crossType ? 0.55 : 1;
   const isLocked = !!d.lockedBy;
 
   return (
@@ -35,7 +36,9 @@ export const ElementNode = memo(function ElementNode({
           ? 'border-dashed'
           : selected
             ? 'border-blue-500 shadow-lg'
-            : 'border-gray-700',
+            : d.crossType
+              ? 'border-blue-300 border-dashed'
+              : 'border-gray-700',
       ].join(' ')}
     >
       <Handle
@@ -73,7 +76,7 @@ export const PropositionNode = memo(function PropositionNode({
   selected,
 }: NodeProps) {
   const d = data as NodeData;
-  const opacity = d.dimmed ? 0.2 : 1;
+  const opacity = d.dimmed ? 0.2 : d.crossType ? 0.55 : 1;
   const fontSize = Math.max(9, Math.round(11 * d.size));
   const isLocked = !!d.lockedBy;
 
@@ -92,7 +95,9 @@ export const PropositionNode = memo(function PropositionNode({
           ? 'border-dashed'
           : selected
             ? 'border-amber-500 shadow-lg'
-            : 'border-amber-700',
+            : d.crossType
+              ? 'border-amber-300 border-dashed'
+              : 'border-amber-700',
       ].join(' ')}
     >
       <Handle

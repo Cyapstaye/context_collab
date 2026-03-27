@@ -33,7 +33,7 @@ export default function HomePage() {
 
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm('프로젝트를 삭제하시겠습니까? 모든 페이지가 함께 삭제됩니다.')) return;
+    if (!confirm('Delete this project? All pages will also be deleted.')) return;
     try {
       await api.deleteProject(id);
       setProjects((prev) => prev.filter((p) => p.id !== id));
@@ -48,13 +48,13 @@ export default function HomePage() {
       <div className="border-b border-border bg-panel px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-gray-800">Context Collab</h1>
-          <p className="text-xs text-gray-500 mt-0.5">지식 그래프 협업 캔버스</p>
+          <p className="text-xs text-gray-500 mt-0.5">Collaborative knowledge graph canvas</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="rounded bg-gray-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-700 transition-colors"
         >
-          + 새 프로젝트
+          + New project
         </button>
       </div>
 
@@ -71,7 +71,7 @@ export default function HomePage() {
                 if (e.key === 'Enter') handleCreate();
                 if (e.key === 'Escape') { setShowForm(false); setNewName(''); }
               }}
-              placeholder="프로젝트 이름..."
+              placeholder="Project name..."
               className="flex-1 max-w-sm rounded border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-gray-500"
             />
             <button
@@ -79,29 +79,29 @@ export default function HomePage() {
               disabled={creating}
               className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
             >
-              {creating ? '생성 중...' : '생성'}
+              {creating ? 'Creating...' : 'Create'}
             </button>
             <button
               onClick={() => { setShowForm(false); setNewName(''); }}
               className="rounded px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700"
             >
-              취소
+              Cancel
             </button>
           </div>
         )}
 
         {loading && (
-          <p className="text-sm text-gray-400">불러오는 중...</p>
+          <p className="text-sm text-gray-400">Loading...</p>
         )}
 
         {!loading && projects.length === 0 && !showForm && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-sm text-gray-500 mb-4">아직 프로젝트가 없습니다.</p>
+            <p className="text-sm text-gray-500 mb-4">No projects yet.</p>
             <button
               onClick={() => setShowForm(true)}
               className="rounded bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-700"
             >
-              첫 프로젝트 만들기
+              Create first project
             </button>
           </div>
         )}
@@ -120,18 +120,18 @@ export default function HomePage() {
                     <p className="text-xs text-gray-500 mt-0.5">{p.description}</p>
                   )}
                   <p className="text-xs text-gray-400 mt-1">
-                    {new Date(p.createdAt).toLocaleDateString('ko-KR')}
+                    {new Date(p.createdAt).toLocaleDateString('en-US')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400 group-hover:text-gray-600">
-                    열기 →
+                    Open →
                   </span>
                   <button
                     onClick={(e) => handleDelete(p.id, e)}
                     className="ml-2 rounded px-2 py-0.5 text-xs text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
-                    삭제
+                    Delete
                   </button>
                 </div>
               </div>

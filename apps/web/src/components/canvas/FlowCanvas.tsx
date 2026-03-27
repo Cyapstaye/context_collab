@@ -106,6 +106,7 @@ export default function FlowCanvas({ activeView }: Props) {
   const storeAddEdge = useCanvasStore((s) => s.addEdge);
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode);
   const setSelectedEdge = useCanvasStore((s) => s.setSelectedEdge);
+  const undo = useCanvasStore((s) => s.undo);
 
   const nodeLocks = useRealtimeStore((s) => s.nodeLocks);
   const presenceUsers = useRealtimeStore((s) => s.presenceUsers);
@@ -117,7 +118,7 @@ export default function FlowCanvas({ activeView }: Props) {
     return activeView === 'proposition' ? ['proposition'] : ['element'];
   }, [activeView]);
 
-  // Connected node IDs for detail-view dimming
+  // Connected node IDs for detail-view dimming (all types)
   const connectedIds = useMemo(() => {
     if (!selectedNodeId) return null;
     const set = new Set<string>([selectedNodeId]);
@@ -128,11 +129,24 @@ export default function FlowCanvas({ activeView }: Props) {
     return set;
   }, [selectedNodeId, storeEdges]);
 
+  // Cross-type connected nodes: connected to selected node but NOT of the current view's type
+  // These appear as context in detail view (slightly faded, dashed border)
+  const crossTypeConnectedNodes = useMemo(() => {
+    if (!selectedNodeId || !connectedIds) return [];
+    return storeNodes.filter(
+      (n) =>
+        connectedIds.has(n.id) &&
+        n.id !== selectedNodeId &&
+        !visibleNodeTypes.includes(n.type as 'element' | 'proposition'),
+    );
+  }, [selectedNodeId, connectedIds, storeNodes, visibleNodeTypes]);
+
   const identity = getUserIdentity();
 
   // Derive RF-format nodes from store (positions + visibility + lock state)
   const derivedNodes = useMemo((): RFNode[] => {
-    return storeNodes
+    // Primary nodes: filtered by current view type
+    const primary = storeNodes
       .filter((n) => visibleNodeTypes.includes(n.type as 'element' | 'proposition'))
       .map((n) => {
         const pos =
@@ -162,13 +176,41 @@ export default function FlowCanvas({ activeView }: Props) {
           position: pos,
           data,
           selected: n.id === selectedNodeId,
-          // View-only users cannot drag; others blocked by locks
           draggable: !isViewOnly && !isLockedByOther,
         };
       });
-  }, [storeNodes, activeView, visibleNodeTypes, selectedNodeId, connectedIds, nodeLocks, presenceUsers, isViewOnly, identity.userId]);
 
-  // Derive RF-format edges (only between visible nodes)
+    // Cross-type context nodes: shown during detail view when a node has cross-type connections
+    const crossTypeIds = new Set(primary.map((n) => n.id));
+    const cross = crossTypeConnectedNodes
+      .filter((n) => !crossTypeIds.has(n.id))
+      .map((n) => {
+        const pos =
+          n.positions[n.type === 'element' ? 'element' : 'proposition'] ??
+          n.positions.element ??
+          n.positions.proposition ??
+          { x: 0, y: 0 };
+
+        const data: NodeData = {
+          name: n.name,
+          size: n.size,
+          crossType: true,
+        };
+
+        return {
+          id: n.id,
+          type: n.type,
+          position: pos,
+          data,
+          selected: false,
+          draggable: false, // Cross-type context nodes are display-only
+        };
+      });
+
+    return [...primary, ...cross];
+  }, [storeNodes, activeView, visibleNodeTypes, selectedNodeId, connectedIds, crossTypeConnectedNodes, nodeLocks, presenceUsers, isViewOnly, identity.userId]);
+
+  // Derive RF-format edges (between visible nodes including cross-type context)
   const derivedEdges = useMemo((): RFEdge[] => {
     const visibleIds = new Set(derivedNodes.map((n) => n.id));
     return storeEdges
@@ -197,18 +239,20 @@ export default function FlowCanvas({ activeView }: Props) {
     .map((e) => `${e.id}:${e.weight}:${e.relation}`)
     .join('|');
 
-  // Lock key to trigger resync when lock state changes
   const lockKey = Object.entries(nodeLocks).map(([k, v]) => `${k}:${v}`).join('|');
+
+  // Cross-type context key — resync when selection or cross-type connections change
+  const crossTypeKey = crossTypeConnectedNodes.map((n) => n.id).join('|');
 
   useEffect(() => {
     setNodes(derivedNodes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, nodeIdentityKey, lockKey, isViewOnly]);
+  }, [activeView, nodeIdentityKey, lockKey, isViewOnly, selectedNodeId, crossTypeKey]);
 
   useEffect(() => {
     setEdges(derivedEdges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [edgeDataKey, activeView]);
+  }, [edgeDataKey, activeView, selectedNodeId, crossTypeKey]);
 
   useEffect(() => {
     setNodes((nds) =>
@@ -277,6 +321,21 @@ export default function FlowCanvas({ activeView }: Props) {
     setSelectedNode(null);
     setSelectedEdge(null);
   }, [setSelectedNode, setSelectedEdge]);
+
+  // ── cmd+Z undo ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        // Only fire if not typing in an input/textarea
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo]);
 
   // ── Cursor emission ────────────────────────────────────────────────────────
   const canvasRef = useRef<HTMLDivElement>(null);

@@ -26,7 +26,7 @@ export default function PresenceBar() {
         </div>
       ))}
       {allUsers.length > 1 && (
-        <span className="text-[10px] text-gray-400">{allUsers.length}명</span>
+        <span className="text-[10px] text-gray-400">{allUsers.length} online</span>
       )}
     </div>
   );

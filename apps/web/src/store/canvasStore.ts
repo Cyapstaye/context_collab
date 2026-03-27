@@ -19,6 +19,20 @@ export interface CanvasEdge {
   relation: string;
 }
 
+// ── Undo stack ────────────────────────────────────────────────────────────────
+
+type UndoEntry =
+  | { type: 'NODE_CREATED'; nodeId: string }
+  | { type: 'EDGE_CREATED'; edgeId: string }
+  | { type: 'NODE_NAME'; nodeId: string; prev: string }
+  | { type: 'NODE_SIZE'; nodeId: string; prev: number }
+  | { type: 'NODE_LABELS'; nodeId: string; prev: string[] }
+  | { type: 'NODE_POSITION'; nodeId: string; view: ViewName; prev: { x: number; y: number } | null }
+  | { type: 'EDGE_WEIGHT'; edgeId: string; prev: number }
+  | { type: 'EDGE_RELATION'; edgeId: string; prev: string };
+
+const MAX_UNDO = 50;
+
 interface CanvasStore {
   pageId: string | null;
   projectId: string | null;
@@ -34,6 +48,11 @@ interface CanvasStore {
   loadError: string | null;
   mutationError: string | null;
 
+  // Undo
+  undoStack: UndoEntry[];
+  _isUndoing: boolean;
+  undo: () => void;
+
   loadPage: (projectId: string, pageId: string) => Promise<void>;
   clearMutationError: () => void;
 
@@ -41,12 +60,16 @@ interface CanvasStore {
   updateNodePosition: (id: string, view: ViewName, pos: { x: number; y: number }) => void;
   updateNodeName: (id: string, name: string) => void;
   updateNodeSize: (id: string, size: number) => void;
+  updateNodeLabels: (id: string, labels: string[]) => void;
   deleteNode: (id: string) => Promise<void>;
 
   addEdge: (source: string, target: string) => Promise<void>;
   deleteEdge: (id: string) => Promise<void>;
   updateEdgeWeight: (id: string, weight: number) => void;
   updateEdgeRelation: (id: string, relation: string) => void;
+
+  addPageLabel: (label: string) => void;
+  addPageRelation: (relation: string) => void;
 
   setActiveView: (view: ViewName) => void;
   setSelectedNode: (id: string | null) => void;
@@ -97,6 +120,18 @@ function buildInitialPositions(
   return positions;
 }
 
+// Push undo entry, coalescing same-field edits (don't push if top is same operation)
+function pushUndoEntry(stack: UndoEntry[], entry: UndoEntry): UndoEntry[] {
+  const entryKey = `${entry.type}:${'nodeId' in entry ? entry.nodeId : 'edgeId' in entry ? entry.edgeId : ''}`;
+  if (stack.length > 0) {
+    const top = stack[stack.length - 1];
+    const topKey = `${top.type}:${'nodeId' in top ? top.nodeId : 'edgeId' in top ? top.edgeId : ''}`;
+    if (topKey === entryKey) return stack; // Coalesce — keep original "before" value
+  }
+  const next = [...stack, entry];
+  return next.length > MAX_UNDO ? next.slice(next.length - MAX_UNDO) : next;
+}
+
 export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   pageId: null,
   projectId: null,
@@ -111,6 +146,51 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   loading: false,
   loadError: null,
   mutationError: null,
+  undoStack: [],
+  _isUndoing: false,
+
+  // ── Undo ────────────────────────────────────────────────────────────────────
+  undo: () => {
+    const { undoStack } = get();
+    if (undoStack.length === 0) return;
+    const entry = undoStack[undoStack.length - 1];
+    set({ undoStack: undoStack.slice(0, -1), _isUndoing: true });
+
+    try {
+      const store = get();
+      switch (entry.type) {
+        case 'NODE_CREATED':
+          store.deleteNode(entry.nodeId);
+          break;
+        case 'EDGE_CREATED':
+          store.deleteEdge(entry.edgeId);
+          break;
+        case 'NODE_NAME':
+          store.updateNodeName(entry.nodeId, entry.prev);
+          break;
+        case 'NODE_SIZE':
+          store.updateNodeSize(entry.nodeId, entry.prev);
+          break;
+        case 'NODE_LABELS':
+          store.updateNodeLabels(entry.nodeId, entry.prev);
+          break;
+        case 'NODE_POSITION': {
+          if (entry.prev) {
+            store.updateNodePosition(entry.nodeId, entry.view, entry.prev);
+          }
+          break;
+        }
+        case 'EDGE_WEIGHT':
+          store.updateEdgeWeight(entry.edgeId, entry.prev);
+          break;
+        case 'EDGE_RELATION':
+          store.updateEdgeRelation(entry.edgeId, entry.prev);
+          break;
+      }
+    } finally {
+      set({ _isUndoing: false });
+    }
+  },
 
   loadPage: async (projectId: string, pageId: string) => {
     set({
@@ -125,6 +205,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       pageName: null,
       pageLabels: [],
       pageRelations: [],
+      undoStack: [],
     });
     try {
       const [pageRes, nodesRes, edgesRes] = await Promise.all([
@@ -176,22 +257,37 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
         size: res.data.size,
         positions: res.data.positions,
       };
+      if (!get()._isUndoing) {
+        set((s) => ({
+          undoStack: pushUndoEntry(s.undoStack, { type: 'NODE_CREATED', nodeId: node.id }),
+        }));
+      }
       set((s) => ({
         nodes: [...s.nodes, node],
         selectedNodeId: node.id,
         selectedEdgeId: null,
       }));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '노드 추가 실패';
+      const msg = err instanceof Error ? err.message : 'Failed to add node';
       set({ mutationError: msg });
     }
   },
 
   updateNodePosition: (id, view, pos) => {
-    // Compute merged positions once — used for both local state and API call
     const { pageId, nodes } = get();
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
+    const prevPos = node.positions[view];
+    if (!get()._isUndoing) {
+      set((s) => ({
+        undoStack: pushUndoEntry(s.undoStack, {
+          type: 'NODE_POSITION',
+          nodeId: id,
+          view,
+          prev: prevPos,
+        }),
+      }));
+    }
     const mergedPositions: NodePositions = { ...node.positions, [view]: pos };
     set((s) => ({
       nodes: s.nodes.map((n) =>
@@ -199,10 +295,9 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       ),
     }));
     if (!pageId) return;
-    // Debounce position API calls to batch rapid drag events
     debounce(`node-pos:${id}`, 100, () => {
       api.updateNode(pageId, id, { positions: mergedPositions }).catch((err) => {
-        const msg = err instanceof Error ? err.message : '위치 저장 실패';
+        const msg = err instanceof Error ? err.message : 'Failed to save position';
         set({ mutationError: msg });
       });
     });
@@ -211,6 +306,15 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   updateNodeName: (id, name) => {
     const prev = get().nodes.find((n) => n.id === id);
     if (!prev) return;
+    if (!get()._isUndoing) {
+      set((s) => ({
+        undoStack: pushUndoEntry(s.undoStack, {
+          type: 'NODE_NAME',
+          nodeId: id,
+          prev: prev.name,
+        }),
+      }));
+    }
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, name } : n)),
     }));
@@ -220,7 +324,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       api.updateNode(pageId, id, { name }).catch((err) => {
         set((s) => ({
           nodes: s.nodes.map((n) => (n.id === id ? { ...n, name: prev.name } : n)),
-          mutationError: err instanceof Error ? err.message : '이름 저장 실패',
+          mutationError: err instanceof Error ? err.message : 'Failed to save name',
         }));
       });
     });
@@ -229,6 +333,15 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   updateNodeSize: (id, size) => {
     const prev = get().nodes.find((n) => n.id === id);
     if (!prev) return;
+    if (!get()._isUndoing) {
+      set((s) => ({
+        undoStack: pushUndoEntry(s.undoStack, {
+          type: 'NODE_SIZE',
+          nodeId: id,
+          prev: prev.size,
+        }),
+      }));
+    }
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, size } : n)),
     }));
@@ -238,7 +351,34 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       api.updateNode(pageId, id, { size }).catch((err) => {
         set((s) => ({
           nodes: s.nodes.map((n) => (n.id === id ? { ...n, size: prev.size } : n)),
-          mutationError: err instanceof Error ? err.message : '크기 저장 실패',
+          mutationError: err instanceof Error ? err.message : 'Failed to save size',
+        }));
+      });
+    });
+  },
+
+  updateNodeLabels: (id, labels) => {
+    const prev = get().nodes.find((n) => n.id === id);
+    if (!prev) return;
+    if (!get()._isUndoing) {
+      set((s) => ({
+        undoStack: pushUndoEntry(s.undoStack, {
+          type: 'NODE_LABELS',
+          nodeId: id,
+          prev: prev.labels,
+        }),
+      }));
+    }
+    set((s) => ({
+      nodes: s.nodes.map((n) => (n.id === id ? { ...n, labels } : n)),
+    }));
+    const { pageId } = get();
+    if (!pageId) return;
+    debounce(`node-labels:${id}`, 300, () => {
+      api.updateNode(pageId, id, { labels }).catch((err) => {
+        set((s) => ({
+          nodes: s.nodes.map((n) => (n.id === id ? { ...n, labels: prev.labels } : n)),
+          mutationError: err instanceof Error ? err.message : 'Failed to save labels',
         }));
       });
     });
@@ -249,7 +389,6 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
     const prevNodes = get().nodes;
     const prevEdges = get().edges;
     const prevSelected = get().selectedNodeId;
-    // Optimistic delete
     set((s) => ({
       nodes: s.nodes.filter((n) => n.id !== id),
       edges: s.edges.filter((e) => e.source !== id && e.target !== id),
@@ -263,7 +402,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
         nodes: prevNodes,
         edges: prevEdges,
         selectedNodeId: prevSelected,
-        mutationError: err instanceof Error ? err.message : '노드 삭제 실패',
+        mutationError: err instanceof Error ? err.message : 'Failed to delete node',
       });
     }
   },
@@ -271,7 +410,6 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   addEdge: async (source, target) => {
     const { pageId, edges } = get();
     if (!pageId) return;
-    // Prevent duplicates locally
     const exists = edges.some(
       (e) =>
         (e.source === source && e.target === target) ||
@@ -287,13 +425,18 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
         weight: res.data.weight,
         relation: res.data.relation,
       };
+      if (!get()._isUndoing) {
+        set((s) => ({
+          undoStack: pushUndoEntry(s.undoStack, { type: 'EDGE_CREATED', edgeId: edge.id }),
+        }));
+      }
       set((s) => ({
         edges: [...s.edges, edge],
         selectedEdgeId: edge.id,
         selectedNodeId: null,
       }));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '엣지 추가 실패';
+      const msg = err instanceof Error ? err.message : 'Failed to add edge';
       set({ mutationError: msg });
     }
   },
@@ -313,7 +456,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       set({
         edges: prevEdges,
         selectedEdgeId: prevSelected,
-        mutationError: err instanceof Error ? err.message : '엣지 삭제 실패',
+        mutationError: err instanceof Error ? err.message : 'Failed to delete edge',
       });
     }
   },
@@ -321,6 +464,15 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   updateEdgeWeight: (id, weight) => {
     const prev = get().edges.find((e) => e.id === id);
     if (!prev) return;
+    if (!get()._isUndoing) {
+      set((s) => ({
+        undoStack: pushUndoEntry(s.undoStack, {
+          type: 'EDGE_WEIGHT',
+          edgeId: id,
+          prev: prev.weight,
+        }),
+      }));
+    }
     set((s) => ({
       edges: s.edges.map((e) => (e.id === id ? { ...e, weight } : e)),
     }));
@@ -330,7 +482,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       api.updateEdge(pageId, id, { weight }).catch((err) => {
         set((s) => ({
           edges: s.edges.map((e) => (e.id === id ? { ...e, weight: prev.weight } : e)),
-          mutationError: err instanceof Error ? err.message : '가중치 저장 실패',
+          mutationError: err instanceof Error ? err.message : 'Failed to save weight',
         }));
       });
     });
@@ -339,6 +491,15 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   updateEdgeRelation: (id, relation) => {
     const prev = get().edges.find((e) => e.id === id);
     if (!prev) return;
+    if (!get()._isUndoing) {
+      set((s) => ({
+        undoStack: pushUndoEntry(s.undoStack, {
+          type: 'EDGE_RELATION',
+          edgeId: id,
+          prev: prev.relation,
+        }),
+      }));
+    }
     set((s) => ({
       edges: s.edges.map((e) => (e.id === id ? { ...e, relation } : e)),
     }));
@@ -348,9 +509,33 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       api.updateEdge(pageId, id, { relation }).catch((err) => {
         set((s) => ({
           edges: s.edges.map((e) => (e.id === id ? { ...e, relation: prev.relation } : e)),
-          mutationError: err instanceof Error ? err.message : '관계 저장 실패',
+          mutationError: err instanceof Error ? err.message : 'Failed to save relation',
         }));
       });
+    });
+  },
+
+  // ── Page label / relation pool ──────────────────────────────────────────────
+
+  addPageLabel: (label) => {
+    const { pageLabels, pageId, projectId } = get();
+    if (!label.trim() || pageLabels.includes(label)) return;
+    const next = [...pageLabels, label];
+    set({ pageLabels: next });
+    if (!pageId || !projectId) return;
+    debounce('page-labels', 500, () => {
+      api.updatePage(projectId, pageId, { labels: next }).catch(() => {/* best-effort */});
+    });
+  },
+
+  addPageRelation: (relation) => {
+    const { pageRelations, pageId, projectId } = get();
+    if (!relation.trim() || pageRelations.includes(relation)) return;
+    const next = [...pageRelations, relation];
+    set({ pageRelations: next });
+    if (!pageId || !projectId) return;
+    debounce('page-relations', 500, () => {
+      api.updatePage(projectId, pageId, { relations: next }).catch(() => {/* best-effort */});
     });
   },
 
@@ -390,7 +575,6 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   applyRemoteNodeCreated: (node) => {
     set((s) => {
       if (s.nodes.some((n) => n.id === node.id)) {
-        // Already present (our own broadcast) — update with server data
         return { nodes: s.nodes.map((n) => (n.id === node.id ? { ...n, ...node } : n)) };
       }
       return { nodes: [...s.nodes, node] };

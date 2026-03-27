@@ -86,7 +86,7 @@ export function usePageSocket(pageId: string | null): void {
       // Look up the lock holder's display name from current presence state
       const lockerEmail =
         useRealtimeStore.getState().presenceUsers.find((u) => u.userId === lockedBy)?.email ?? lockedBy;
-      setLockDeniedMessage(`잠금 실패 — "${lockerEmail}" 편집 중`);
+      setLockDeniedMessage(`Lock denied — "${lockerEmail}" is editing`);
       // Auto-clear the message after 4 seconds
       setTimeout(() => setLockDeniedMessage(null), 4000);
     });

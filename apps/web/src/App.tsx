@@ -18,7 +18,7 @@ export default function App() {
   if (initializing) {
     return (
       <div className="flex h-full items-center justify-center bg-canvas">
-        <p className="text-sm text-gray-400">초기화 중...</p>
+        <p className="text-sm text-gray-400">Initializing...</p>
       </div>
     );
   }

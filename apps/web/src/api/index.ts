@@ -58,6 +58,8 @@ export const api = {
     req<Page>('POST', `/projects/${projectId}/pages`, data),
   getPage: (projectId: string, id: string) =>
     req<Page>('GET', `/projects/${projectId}/pages/${id}`),
+  updatePage: (projectId: string, id: string, data: { name?: string; labels?: string[]; relations?: string[] }) =>
+    req<Page>('PATCH', `/projects/${projectId}/pages/${id}`, data),
   deletePage: (projectId: string, id: string) =>
     req<void>('DELETE', `/projects/${projectId}/pages/${id}`),
   duplicatePage: (projectId: string, id: string) =>

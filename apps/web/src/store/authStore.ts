@@ -65,7 +65,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     });
     const json = await res.json() as { data?: { token: string; user: AuthUser }; message?: string };
     if (!res.ok) {
-      throw new Error(json.message ?? '로그인 실패');
+      throw new Error(json.message ?? 'Login failed');
     }
 
     const { token, user } = json.data!;

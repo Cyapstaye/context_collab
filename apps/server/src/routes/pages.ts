@@ -88,7 +88,7 @@ pagesRouter.post('/import', async (req: Request, res: Response) => {
     const newPage = await prisma.page.create({
       data: {
         projectId,
-        name: src.name + ' (가져오기)',
+        name: src.name + ' (imported)',
         labelsJson: JSON.stringify(src.labels),
         relationsJson: JSON.stringify(src.relations),
         order,
@@ -273,7 +273,7 @@ pagesRouter.post('/:id/duplicate', async (req: Request, res: Response) => {
     const newPage = await prisma.page.create({
       data: {
         projectId,
-        name: original.name + ' (복사)',
+        name: original.name + ' (copy)',
         labelsJson: original.labelsJson,
         relationsJson: original.relationsJson,
         order,

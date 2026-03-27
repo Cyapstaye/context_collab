@@ -25,7 +25,7 @@ export default function CanvasPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-canvas">
-        <p className="text-sm text-gray-400">페이지 불러오는 중...</p>
+        <p className="text-sm text-gray-400">Loading page...</p>
       </div>
     );
   }
@@ -34,13 +34,13 @@ export default function CanvasPage() {
     return (
       <div className="flex h-full items-center justify-center bg-canvas">
         <div className="text-center space-y-3">
-          <p className="text-sm text-gray-600">페이지를 불러올 수 없습니다.</p>
+          <p className="text-sm text-gray-600">Failed to load page.</p>
           <p className="text-xs text-gray-400">{loadError}</p>
           <button
             onClick={() => projectId ? navigate(`/projects/${projectId}`) : navigate('/')}
             className="rounded bg-gray-900 px-4 py-1.5 text-sm text-white hover:bg-gray-700"
           >
-            프로젝트로 돌아가기
+            Back to project
           </button>
         </div>
       </div>

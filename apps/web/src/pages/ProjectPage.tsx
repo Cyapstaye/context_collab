@@ -46,7 +46,7 @@ export default function ProjectPage() {
   async function handleDeletePage(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     if (!projectId) return;
-    if (!confirm('페이지를 삭제하시겠습니까?')) return;
+    if (!confirm('Delete this page?')) return;
     try {
       await api.deletePage(projectId, id);
       setPages((prev) => prev.filter((p) => p.id !== id));
@@ -98,7 +98,7 @@ export default function ProjectPage() {
       setPages((prev) => [...prev, res.data]);
     } catch (err) {
       console.error('Import failed:', err);
-      alert('가져오기 실패: 올바른 페이지 JSON 파일인지 확인하세요.');
+      alert('Import failed: make sure the file is a valid page JSON export.');
     } finally {
       if (importRef.current) importRef.current.value = '';
     }
@@ -107,7 +107,7 @@ export default function ProjectPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-canvas">
-        <p className="text-sm text-gray-400">불러오는 중...</p>
+        <p className="text-sm text-gray-400">Loading...</p>
       </div>
     );
   }
@@ -116,12 +116,12 @@ export default function ProjectPage() {
     return (
       <div className="flex h-full items-center justify-center bg-canvas">
         <div className="text-center">
-          <p className="text-sm text-gray-600">프로젝트를 찾을 수 없습니다.</p>
+          <p className="text-sm text-gray-600">Project not found.</p>
           <button
             onClick={() => navigate('/')}
             className="mt-4 text-sm text-blue-500 hover:text-blue-700"
           >
-            홈으로 돌아가기
+            Back to home
           </button>
         </div>
       </div>
@@ -137,7 +137,7 @@ export default function ProjectPage() {
             onClick={() => navigate('/')}
             className="text-xs text-gray-400 hover:text-gray-600 mb-1 block"
           >
-            ← 홈
+            ← Home
           </button>
           <h1 className="text-lg font-semibold text-gray-800">{project.name}</h1>
           {project.description && (
@@ -157,13 +157,13 @@ export default function ProjectPage() {
             onClick={handleImportClick}
             className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:border-gray-500 hover:text-gray-800 transition-colors"
           >
-            가져오기
+            Import
           </button>
           <button
             onClick={() => setShowForm(true)}
             className="rounded bg-gray-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-700 transition-colors"
           >
-            + 새 페이지
+            + New page
           </button>
         </div>
       </div>
@@ -181,7 +181,7 @@ export default function ProjectPage() {
                 if (e.key === 'Enter') handleCreatePage();
                 if (e.key === 'Escape') { setShowForm(false); setNewPageName(''); }
               }}
-              placeholder="페이지 이름..."
+              placeholder="Page name..."
               className="flex-1 max-w-sm rounded border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-gray-500"
             />
             <button
@@ -189,25 +189,25 @@ export default function ProjectPage() {
               disabled={creating}
               className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
             >
-              {creating ? '생성 중...' : '생성'}
+              {creating ? 'Creating...' : 'Create'}
             </button>
             <button
               onClick={() => { setShowForm(false); setNewPageName(''); }}
               className="rounded px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700"
             >
-              취소
+              Cancel
             </button>
           </div>
         )}
 
         {pages.length === 0 && !showForm && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-sm text-gray-500 mb-4">아직 페이지가 없습니다.</p>
+            <p className="text-sm text-gray-500 mb-4">No pages yet.</p>
             <button
               onClick={() => setShowForm(true)}
               className="rounded bg-gray-900 px-5 py-2 text-sm font-medium text-white hover:bg-gray-700"
             >
-              첫 페이지 만들기
+              Create first page
             </button>
           </div>
         )}
@@ -223,33 +223,33 @@ export default function ProjectPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-800">{p.name}</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    {new Date(p.createdAt).toLocaleDateString('ko-KR')}
+                    {new Date(p.createdAt).toLocaleDateString('en-US')}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => handleExport(p.id, e)}
                     className="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700"
-                    title="JSON 내보내기"
+                    title="Export JSON"
                   >
-                    내보내기
+                    Export
                   </button>
                   <button
                     onClick={(e) => handleDuplicate(p.id, e)}
                     className="rounded px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700"
-                    title="복사"
+                    title="Duplicate"
                   >
-                    복사
+                    Duplicate
                   </button>
                   <button
                     onClick={(e) => handleDeletePage(p.id, e)}
                     className="rounded px-2 py-0.5 text-xs text-red-400 hover:text-red-600"
-                    title="삭제"
+                    title="Delete"
                   >
-                    삭제
+                    Delete
                   </button>
                   <span className="ml-1 text-xs text-gray-400 group-hover:text-gray-600">
-                    열기 →
+                    Open →
                   </span>
                 </div>
               </div>
