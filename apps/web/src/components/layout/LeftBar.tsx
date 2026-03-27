@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCanvasStore } from '../../store/canvasStore';
+import { useAuthStore } from '../../store/authStore';
 import type { NodeType } from '@context-collab/shared';
 
 interface Props {
@@ -22,6 +23,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
   const addNode = useCanvasStore((s) => s.addNode);
   const selectNodeFromSidebar = useCanvasStore((s) => s.selectNodeFromSidebar);
+  const isViewOnly = useAuthStore((s) => s.isViewOnly());
 
   const [form, setForm] = useState<AddFormState>(CLOSED);
   const [projectName, setProjectName] = useState<string>('');
@@ -49,6 +51,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
   const propositions = nodes.filter((n) => n.type === 'proposition');
 
   function openForm(type: NodeType) {
+    if (isViewOnly) return;
     setForm({ open: true, type, name: '' });
   }
 
@@ -92,12 +95,14 @@ export default function LeftBar({ projectId, pageId }: Props) {
         <section>
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-gray-500">요소 Element</p>
-            <button
-              onClick={() => openForm('element')}
-              className="text-xs text-blue-500 hover:text-blue-700 font-medium"
-            >
-              + 추가
-            </button>
+            {!isViewOnly && (
+              <button
+                onClick={() => openForm('element')}
+                className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+              >
+                + 추가
+              </button>
+            )}
           </div>
 
           {form.open && form.type === 'element' && (
@@ -151,12 +156,14 @@ export default function LeftBar({ projectId, pageId }: Props) {
         <section>
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-gray-500">명제 Proposition</p>
-            <button
-              onClick={() => openForm('proposition')}
-              className="text-xs text-amber-500 hover:text-amber-700 font-medium"
-            >
-              + 추가
-            </button>
+            {!isViewOnly && (
+              <button
+                onClick={() => openForm('proposition')}
+                className="text-xs text-amber-500 hover:text-amber-700 font-medium"
+              >
+                + 추가
+              </button>
+            )}
           </div>
 
           {form.open && form.type === 'proposition' && (

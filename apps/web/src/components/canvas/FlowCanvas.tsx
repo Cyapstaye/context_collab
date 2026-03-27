@@ -19,7 +19,8 @@ import '@xyflow/react/dist/style.css';
 
 import { useCanvasStore } from '../../store/canvasStore';
 import { useRealtimeStore } from '../../store/realtimeStore';
-import { getSocket, userIdentity } from '../../lib/socket';
+import { useAuthStore } from '../../store/authStore';
+import { getSocket, getUserIdentity } from '../../lib/socket';
 import { SOCKET_EVENTS } from '@context-collab/shared';
 import { nodeTypes } from './nodeTypes';
 import type { NodeData } from './nodeTypes';
@@ -57,8 +58,9 @@ function LayerGuide() {
 // Remote cursor overlay (screen-relative coordinates within the canvas container)
 function RemoteCursors() {
   const cursors = useRealtimeStore((s) => s.cursors);
+  const identity = getUserIdentity();
 
-  const remote = Object.values(cursors).filter((c) => c.userId !== userIdentity.userId);
+  const remote = Object.values(cursors).filter((c) => c.userId !== identity.userId);
   if (remote.length === 0) return null;
 
   return (
@@ -108,6 +110,8 @@ export default function FlowCanvas({ activeView }: Props) {
   const nodeLocks = useRealtimeStore((s) => s.nodeLocks);
   const presenceUsers = useRealtimeStore((s) => s.presenceUsers);
 
+  const isViewOnly = useAuthStore((s) => s.isViewOnly());
+
   // Which node types are visible per view
   const visibleNodeTypes = useMemo((): Array<'element' | 'proposition'> => {
     return activeView === 'proposition' ? ['proposition'] : ['element'];
@@ -124,6 +128,8 @@ export default function FlowCanvas({ activeView }: Props) {
     return set;
   }, [selectedNodeId, storeEdges]);
 
+  const identity = getUserIdentity();
+
   // Derive RF-format nodes from store (positions + visibility + lock state)
   const derivedNodes = useMemo((): RFNode[] => {
     return storeNodes
@@ -137,7 +143,7 @@ export default function FlowCanvas({ activeView }: Props) {
         const dimmed = connectedIds !== null && !connectedIds.has(n.id);
 
         const lockedByUserId = nodeLocks[n.id];
-        const isLockedByOther = lockedByUserId !== undefined && lockedByUserId !== userIdentity.userId;
+        const isLockedByOther = lockedByUserId !== undefined && lockedByUserId !== identity.userId;
         const lockerUser = isLockedByOther
           ? presenceUsers.find((u) => u.userId === lockedByUserId)
           : null;
@@ -156,10 +162,11 @@ export default function FlowCanvas({ activeView }: Props) {
           position: pos,
           data,
           selected: n.id === selectedNodeId,
-          draggable: !isLockedByOther,
+          // View-only users cannot drag; others blocked by locks
+          draggable: !isViewOnly && !isLockedByOther,
         };
       });
-  }, [storeNodes, activeView, visibleNodeTypes, selectedNodeId, connectedIds, nodeLocks, presenceUsers]);
+  }, [storeNodes, activeView, visibleNodeTypes, selectedNodeId, connectedIds, nodeLocks, presenceUsers, isViewOnly, identity.userId]);
 
   // Derive RF-format edges (only between visible nodes)
   const derivedEdges = useMemo((): RFEdge[] => {
@@ -196,7 +203,7 @@ export default function FlowCanvas({ activeView }: Props) {
   useEffect(() => {
     setNodes(derivedNodes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, nodeIdentityKey, lockKey]);
+  }, [activeView, nodeIdentityKey, lockKey, isViewOnly]);
 
   useEffect(() => {
     setEdges(derivedEdges);
@@ -225,6 +232,7 @@ export default function FlowCanvas({ activeView }: Props) {
 
   const onNodeDragStop = useCallback(
     (_e: React.MouseEvent, node: RFNode) => {
+      if (isViewOnly) return;
       updateNodePosition(node.id, activeView, node.position);
       // Reset lock timeout — user actively dragged the node
       if (pageId) {
@@ -232,22 +240,23 @@ export default function FlowCanvas({ activeView }: Props) {
         if (socket.connected) {
           socket.emit(SOCKET_EVENTS.NODE_LOCK_HEARTBEAT, {
             nodeId: node.id,
-            userId: userIdentity.userId,
+            userId: getUserIdentity().userId,
             pageId,
           });
         }
       }
     },
-    [updateNodePosition, activeView, pageId],
+    [updateNodePosition, activeView, pageId, isViewOnly],
   );
 
   const onConnect = useCallback(
     (params: Connection) => {
+      if (isViewOnly) return;
       if (params.source && params.target) {
         storeAddEdge(params.source, params.target);
       }
     },
-    [storeAddEdge],
+    [storeAddEdge, isViewOnly],
   );
 
   const onNodeClick = useCallback(
@@ -287,7 +296,7 @@ export default function FlowCanvas({ activeView }: Props) {
       if (!socket.connected) return;
 
       socket.emit(SOCKET_EVENTS.CURSOR_MOVE, {
-        userId: userIdentity.userId,
+        userId: getUserIdentity().userId,
         pageId,
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
@@ -309,12 +318,14 @@ export default function FlowCanvas({ activeView }: Props) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+        onConnect={isViewOnly ? undefined : onConnect}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
+        nodesDraggable={!isViewOnly}
+        nodesConnectable={!isViewOnly}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         className="bg-[#f8f8f6]"

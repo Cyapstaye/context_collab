@@ -3,12 +3,15 @@ import type { Project, Page, Node, Edge, NodePositions } from '@context-collab/s
 const BASE = '/api/v1';
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<{ data: T }> {
+  const token = localStorage.getItem('collab:token');
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch(BASE + path, {
     method,
-    ...(body !== undefined && {
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
+    ...(Object.keys(headers).length > 0 && { headers }),
+    ...(body !== undefined && { body: JSON.stringify(body) }),
   });
   if (res.status === 204) return { data: undefined as T };
   const json = await res.json();

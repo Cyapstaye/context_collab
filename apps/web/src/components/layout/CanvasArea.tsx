@@ -1,22 +1,39 @@
+import { useNavigate } from 'react-router-dom';
 import { VIEW_LABELS } from '@context-collab/shared';
 import type { ViewName } from '@context-collab/shared';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useRealtimeStore } from '../../store/realtimeStore';
+import { useAuthStore } from '../../store/authStore';
 import FlowCanvas from '../canvas/FlowCanvas';
 import PresenceBar from '../canvas/PresenceBar';
 
 const VIEWS: ViewName[] = ['element', 'proposition', 'layer'];
 
 export default function CanvasArea() {
+  const navigate = useNavigate();
   const activeView = useCanvasStore((s) => s.activeView);
   const setActiveView = useCanvasStore((s) => s.setActiveView);
   const mutationError = useCanvasStore((s) => s.mutationError);
   const clearMutationError = useCanvasStore((s) => s.clearMutationError);
   const lockDeniedMessage = useRealtimeStore((s) => s.lockDeniedMessage);
   const setLockDeniedMessage = useRealtimeStore((s) => s.setLockDeniedMessage);
+  const isViewOnly = useAuthStore((s) => s.isViewOnly());
 
   return (
     <main className="relative flex h-full flex-1 flex-col overflow-hidden">
+      {/* View-only banner */}
+      {isViewOnly && (
+        <div className="flex items-center justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-800 flex-shrink-0">
+          <span>보기 전용 모드 View-only — 편집하려면</span>
+          <button
+            onClick={() => navigate('/login')}
+            className="font-medium underline hover:text-amber-900"
+          >
+            로그인하세요
+          </button>
+        </div>
+      )}
+
       {/* View switcher bar */}
       <div className="flex items-center gap-1 border-b border-border bg-panel px-4 py-2 flex-shrink-0">
         {VIEWS.map((v) => (

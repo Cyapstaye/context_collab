@@ -1,15 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { SOCKET_EVENTS } from '@context-collab/shared';
 import type { PresenceListPayload } from '@context-collab/shared';
-import { connectSocket, getSocket, userIdentity } from '../lib/socket';
+import { connectSocket, getSocket, getUserIdentity } from '../lib/socket';
 import { useCanvasStore } from '../store/canvasStore';
 import { useRealtimeStore } from '../store/realtimeStore';
+import { useAuthStore } from '../store/authStore';
 import type { PresenceEntry } from '../store/realtimeStore';
 import type { CanvasNode, CanvasEdge } from '../store/canvasStore';
 
 export function usePageSocket(pageId: string | null): void {
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
   const prevSelectedRef = useRef<string | null>(null);
+
+  const isViewOnly = useAuthStore((s) => s.isViewOnly());
 
   const setPresenceList = useRealtimeStore((s) => s.setPresenceList);
   const addPresenceUser = useRealtimeStore((s) => s.addPresenceUser);
@@ -33,13 +36,14 @@ export function usePageSocket(pageId: string | null): void {
     if (!pageId) return;
 
     const socket = connectSocket();
+    const identity = getUserIdentity();
 
     function joinRoom() {
       socket.emit(SOCKET_EVENTS.PAGE_JOIN, {
         pageId,
-        userId: userIdentity.userId,
-        email: userIdentity.email,
-        color: userIdentity.color,
+        userId: identity.userId,
+        email: identity.email,
+        color: identity.color,
       });
     }
 
@@ -72,9 +76,13 @@ export function usePageSocket(pageId: string | null): void {
     socket.on(SOCKET_EVENTS.NODE_UNLOCK, ({ nodeId }: { nodeId: string }) => {
       clearNodeLock(nodeId);
     });
-    socket.on(SOCKET_EVENTS.NODE_LOCK_DENIED, ({ lockedBy }: { nodeId: string; lockedBy: string }) => {
+    socket.on(SOCKET_EVENTS.NODE_LOCK_DENIED, ({ lockedBy }: { nodeId: string; lockedBy: string | null }) => {
       // Revert local selection — lock was not granted
       setSelectedNode(null);
+      if (lockedBy === null) {
+        // Denied because the socket is view-only (should not normally surface here)
+        return;
+      }
       // Look up the lock holder's display name from current presence state
       const lockerEmail =
         useRealtimeStore.getState().presenceUsers.find((u) => u.userId === lockedBy)?.email ?? lockedBy;
@@ -123,7 +131,7 @@ export function usePageSocket(pageId: string | null): void {
       if (socket.connected) {
         socket.emit(SOCKET_EVENTS.PAGE_LEAVE, {
           pageId,
-          userId: userIdentity.userId,
+          userId: getUserIdentity().userId,
         });
       }
 
@@ -131,19 +139,20 @@ export function usePageSocket(pageId: string | null): void {
     };
   }, [pageId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Emit node lock / unlock on selection change ───────────────────────────
+  // ── Emit node lock / unlock on selection change ────────────────────────────
+  // View-only users skip all lock operations.
   useEffect(() => {
-    if (!pageId) return;
+    if (!pageId || isViewOnly) return;
     const socket = getSocket();
     if (!socket.connected) return;
 
+    const identity = getUserIdentity();
     const prev = prevSelectedRef.current;
 
     if (prev !== null && prev !== selectedNodeId) {
-      // Deselected or switched — release previous lock
       socket.emit(SOCKET_EVENTS.NODE_UNLOCK, {
         nodeId: prev,
-        userId: userIdentity.userId,
+        userId: identity.userId,
         pageId,
       });
     }
@@ -151,27 +160,26 @@ export function usePageSocket(pageId: string | null): void {
     if (selectedNodeId !== null) {
       socket.emit(SOCKET_EVENTS.NODE_LOCK, {
         nodeId: selectedNodeId,
-        userId: userIdentity.userId,
+        userId: identity.userId,
         pageId,
       });
     }
 
     prevSelectedRef.current = selectedNodeId;
-  }, [selectedNodeId, pageId]);
+  }, [selectedNodeId, pageId, isViewOnly]);
 
   // ── Lock heartbeat while a node is selected ────────────────────────────────
-  // Keeps the lock alive during editing (name, size) without relying on drag.
   useEffect(() => {
-    if (!selectedNodeId || !pageId) return;
+    if (!selectedNodeId || !pageId || isViewOnly) return;
     const interval = setInterval(() => {
       const socket = getSocket();
       if (!socket.connected) return;
       socket.emit(SOCKET_EVENTS.NODE_LOCK_HEARTBEAT, {
         nodeId: selectedNodeId,
-        userId: userIdentity.userId,
+        userId: getUserIdentity().userId,
         pageId,
       });
     }, 10_000);
     return () => clearInterval(interval);
-  }, [selectedNodeId, pageId]);
+  }, [selectedNodeId, pageId, isViewOnly]);
 }

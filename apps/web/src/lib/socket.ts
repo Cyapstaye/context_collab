@@ -3,30 +3,45 @@ import type { Socket } from 'socket.io-client';
 
 const SERVER_URL = 'http://localhost:3001';
 
-// ─── Persistent user identity (per browser) ───────────────────────────────────
+// ─── User identity ─────────────────────────────────────────────────────────────
+// Returns the current user identity. When authenticated, auth info is stored in
+// collab:user by authStore. When anonymous, a random identity is generated.
 
-function getOrCreateIdentity(): { userId: string; email: string; color: string } {
-  const stored = localStorage.getItem('collab:user');
-  if (stored) {
-    try {
-      return JSON.parse(stored) as { userId: string; email: string; color: string };
-    } catch {
-      // fall through
-    }
-  }
+function getOrCreateAnonIdentity(): { userId: string; email: string; color: string } {
   const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
   const num = Math.floor(Math.random() * 900) + 100;
   const hue = Math.floor(Math.random() * 360);
-  const identity = {
+  return {
     userId: `anon-${suffix}`,
     email: `User #${num}`,
     color: `hsl(${hue}, 65%, 48%)`,
   };
+}
+
+/** Returns the current user identity (authenticated or anonymous). */
+export function getUserIdentity(): { userId: string; email: string; color: string } {
+  const stored = localStorage.getItem('collab:user');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored) as { userId?: string; email?: string; color?: string };
+      if (parsed.userId && parsed.email && parsed.color) {
+        return parsed as { userId: string; email: string; color: string };
+      }
+    } catch {
+      // fall through
+    }
+  }
+  // Generate and persist anon identity
+  const identity = getOrCreateAnonIdentity();
   localStorage.setItem('collab:user', JSON.stringify(identity));
   return identity;
 }
 
-export const userIdentity = getOrCreateIdentity();
+// Legacy export for backwards-compat — evaluated at module load time.
+// Components that need a stable reference use this. Since it's read at
+// load time, authenticated users should ensure auth.init() runs before
+// any canvas route is first rendered.
+export const userIdentity = getUserIdentity();
 
 // ─── Socket singleton (lazy connect) ─────────────────────────────────────────
 
@@ -42,6 +57,9 @@ export function getSocket(): Socket {
 export function connectSocket(): Socket {
   const socket = getSocket();
   if (!socket.connected) {
+    // Pass JWT token so the server can verify and tag the socket as authenticated.
+    const token = localStorage.getItem('collab:token');
+    socket.auth = { token: token ?? null };
     socket.connect();
   }
   return socket;

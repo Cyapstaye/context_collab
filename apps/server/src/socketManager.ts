@@ -2,6 +2,8 @@ import { Server, Socket } from 'socket.io';
 import type { Server as HTTPServer } from 'http';
 import { SOCKET_EVENTS, NODE_LOCK_TIMEOUT_MS } from '@context-collab/shared';
 import type { PresenceUser, PageJoinPayload, PresenceListPayload } from '@context-collab/shared';
+import { verifyToken } from './lib/auth';
+import type { TokenPayload } from './lib/auth';
 
 // ─── In-memory state (ephemeral — not persisted) ──────────────────────────────
 
@@ -57,6 +59,10 @@ function releaseAllLocksForSocket(socketId: string): void {
   socketLocks.delete(socketId);
 }
 
+function getSocketUser(socket: Socket): TokenPayload | null {
+  return (socket.data.user as TokenPayload | undefined) ?? null;
+}
+
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
 export function setupSocket(httpServer: HTTPServer): Server {
@@ -68,6 +74,19 @@ export function setupSocket(httpServer: HTTPServer): Server {
   });
 
   _io = io;
+
+  // Verify JWT token on connection (if present). Unauthenticated sockets are
+  // allowed to connect for presence/view purposes but cannot acquire locks.
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+    if (token) {
+      const payload = verifyToken(token);
+      if (payload) {
+        socket.data.user = payload;
+      }
+    }
+    next();
+  });
 
   io.on('connection', (socket: Socket) => {
     socketLocks.set(socket.id, new Set());
@@ -124,11 +143,11 @@ export function setupSocket(httpServer: HTTPServer): Server {
     });
 
     // ── node:lock:heartbeat ───────────────────────────────────────────────────
-    // Emitted by the client on node drag, node update, and node resize to keep
-    // the lock alive without relying on cursor movement.
     socket.on(SOCKET_EVENTS.NODE_LOCK_HEARTBEAT, (payload: { nodeId: string; userId: string; pageId: string }) => {
+      // View-only sockets cannot hold locks
+      if (!getSocketUser(socket)) return;
+
       const { nodeId, userId, pageId } = payload;
-      // Validate socket is actually in the claimed page room
       if (socketPage.get(socket.id) !== pageId) return;
       const lock = locks.get(nodeId);
       if (lock && lock.userId === userId && lock.socketId === socket.id) {
@@ -141,6 +160,12 @@ export function setupSocket(httpServer: HTTPServer): Server {
     socket.on(SOCKET_EVENTS.NODE_LOCK, (payload: { nodeId: string; userId: string; pageId: string }) => {
       const { nodeId, userId, pageId } = payload;
       const roomName = `page:${pageId}`;
+
+      // View-only sockets cannot acquire locks
+      if (!getSocketUser(socket)) {
+        socket.emit(SOCKET_EVENTS.NODE_LOCK_DENIED, { nodeId, lockedBy: null });
+        return;
+      }
 
       // Validate the requesting socket is actually in the claimed page room
       if (socketPage.get(socket.id) !== pageId) return;
