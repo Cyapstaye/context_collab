@@ -24,6 +24,8 @@ interface RealtimeStore {
   nodeLocks: Record<string, string>;
   // userId → CursorEntry
   cursors: Record<string, CursorEntry>;
+  // Non-null when a lock request was denied — shown as a toast
+  lockDeniedMessage: string | null;
 
   setPresenceList: (users: PresenceEntry[], locks: Array<{ nodeId: string; userId: string }>) => void;
   addPresenceUser: (user: PresenceEntry) => void;
@@ -31,6 +33,7 @@ interface RealtimeStore {
   updateCursor: (userId: string, x: number, y: number) => void;
   setNodeLock: (nodeId: string, userId: string) => void;
   clearNodeLock: (nodeId: string) => void;
+  setLockDeniedMessage: (msg: string | null) => void;
   reset: () => void;
 }
 
@@ -38,6 +41,7 @@ export const useRealtimeStore = create<RealtimeStore>()((set, get) => ({
   presenceUsers: [],
   nodeLocks: {},
   cursors: {},
+  lockDeniedMessage: null,
 
   setPresenceList: (users, locks) => {
     const nodeLocks: Record<string, string> = {};
@@ -83,5 +87,7 @@ export const useRealtimeStore = create<RealtimeStore>()((set, get) => ({
       return { nodeLocks };
     }),
 
-  reset: () => set({ presenceUsers: [], nodeLocks: {}, cursors: {} }),
+  setLockDeniedMessage: (msg) => set({ lockDeniedMessage: msg }),
+
+  reset: () => set({ presenceUsers: [], nodeLocks: {}, cursors: {}, lockDeniedMessage: null }),
 }));

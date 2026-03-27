@@ -17,7 +17,9 @@ export function usePageSocket(pageId: string | null): void {
   const updateCursor = useRealtimeStore((s) => s.updateCursor);
   const setNodeLock = useRealtimeStore((s) => s.setNodeLock);
   const clearNodeLock = useRealtimeStore((s) => s.clearNodeLock);
+  const setLockDeniedMessage = useRealtimeStore((s) => s.setLockDeniedMessage);
   const reset = useRealtimeStore((s) => s.reset);
+  const setSelectedNode = useCanvasStore((s) => s.setSelectedNode);
 
   const applyRemoteNodeCreated = useCanvasStore((s) => s.applyRemoteNodeCreated);
   const applyRemoteNodeUpdated = useCanvasStore((s) => s.applyRemoteNodeUpdated);
@@ -70,7 +72,16 @@ export function usePageSocket(pageId: string | null): void {
     socket.on(SOCKET_EVENTS.NODE_UNLOCK, ({ nodeId }: { nodeId: string }) => {
       clearNodeLock(nodeId);
     });
-    // Silently ignore lock-denied — UI already reflects the lock state from NODE_LOCK broadcast
+    socket.on(SOCKET_EVENTS.NODE_LOCK_DENIED, ({ lockedBy }: { nodeId: string; lockedBy: string }) => {
+      // Revert local selection — lock was not granted
+      setSelectedNode(null);
+      // Look up the lock holder's display name from current presence state
+      const lockerEmail =
+        useRealtimeStore.getState().presenceUsers.find((u) => u.userId === lockedBy)?.email ?? lockedBy;
+      setLockDeniedMessage(`잠금 실패 — "${lockerEmail}" 편집 중`);
+      // Auto-clear the message after 4 seconds
+      setTimeout(() => setLockDeniedMessage(null), 4000);
+    });
 
     // Canvas mutations from other users
     socket.on(SOCKET_EVENTS.NODE_CREATED, ({ node }: { node: CanvasNode }) => {
@@ -100,6 +111,7 @@ export function usePageSocket(pageId: string | null): void {
       socket.off(SOCKET_EVENTS.CURSOR_MOVE);
       socket.off(SOCKET_EVENTS.NODE_LOCK);
       socket.off(SOCKET_EVENTS.NODE_UNLOCK);
+      socket.off(SOCKET_EVENTS.NODE_LOCK_DENIED);
       socket.off(SOCKET_EVENTS.NODE_CREATED);
       socket.off(SOCKET_EVENTS.NODE_UPDATED);
       socket.off(SOCKET_EVENTS.NODE_DELETED);
@@ -145,5 +157,21 @@ export function usePageSocket(pageId: string | null): void {
     }
 
     prevSelectedRef.current = selectedNodeId;
+  }, [selectedNodeId, pageId]);
+
+  // ── Lock heartbeat while a node is selected ────────────────────────────────
+  // Keeps the lock alive during editing (name, size) without relying on drag.
+  useEffect(() => {
+    if (!selectedNodeId || !pageId) return;
+    const interval = setInterval(() => {
+      const socket = getSocket();
+      if (!socket.connected) return;
+      socket.emit(SOCKET_EVENTS.NODE_LOCK_HEARTBEAT, {
+        nodeId: selectedNodeId,
+        userId: userIdentity.userId,
+        pageId,
+      });
+    }, 10_000);
+    return () => clearInterval(interval);
   }, [selectedNodeId, pageId]);
 }

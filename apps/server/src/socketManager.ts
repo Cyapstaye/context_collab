@@ -118,27 +118,32 @@ export function setupSocket(httpServer: HTTPServer): Server {
 
     // ── cursor:move ───────────────────────────────────────────────────────────
     socket.on(SOCKET_EVENTS.CURSOR_MOVE, (payload: { userId: string; pageId: string; x: number; y: number }) => {
-      const { userId, pageId } = payload;
-
-      // Reset inactivity timers for all locks this user holds
-      const userLocks = socketLocks.get(socket.id);
-      if (userLocks) {
-        userLocks.forEach((nodeId) => {
-          const lock = locks.get(nodeId);
-          if (lock && lock.userId === userId) {
-            clearTimeout(lock.timer);
-            lock.timer = setTimeout(() => releaseLock(nodeId), NODE_LOCK_TIMEOUT_MS);
-          }
-        });
-      }
-
+      const { pageId } = payload;
+      // Cursor movement does NOT reset lock timers — only active node interactions do.
       socket.to(`page:${pageId}`).emit(SOCKET_EVENTS.CURSOR_MOVE, payload);
+    });
+
+    // ── node:lock:heartbeat ───────────────────────────────────────────────────
+    // Emitted by the client on node drag, node update, and node resize to keep
+    // the lock alive without relying on cursor movement.
+    socket.on(SOCKET_EVENTS.NODE_LOCK_HEARTBEAT, (payload: { nodeId: string; userId: string; pageId: string }) => {
+      const { nodeId, userId, pageId } = payload;
+      // Validate socket is actually in the claimed page room
+      if (socketPage.get(socket.id) !== pageId) return;
+      const lock = locks.get(nodeId);
+      if (lock && lock.userId === userId && lock.socketId === socket.id) {
+        clearTimeout(lock.timer);
+        lock.timer = setTimeout(() => releaseLock(nodeId), NODE_LOCK_TIMEOUT_MS);
+      }
     });
 
     // ── node:lock ─────────────────────────────────────────────────────────────
     socket.on(SOCKET_EVENTS.NODE_LOCK, (payload: { nodeId: string; userId: string; pageId: string }) => {
       const { nodeId, userId, pageId } = payload;
       const roomName = `page:${pageId}`;
+
+      // Validate the requesting socket is actually in the claimed page room
+      if (socketPage.get(socket.id) !== pageId) return;
 
       const existing = locks.get(nodeId);
 

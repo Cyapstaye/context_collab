@@ -1,6 +1,7 @@
 import { VIEW_LABELS } from '@context-collab/shared';
 import type { ViewName } from '@context-collab/shared';
 import { useCanvasStore } from '../../store/canvasStore';
+import { useRealtimeStore } from '../../store/realtimeStore';
 import FlowCanvas from '../canvas/FlowCanvas';
 import PresenceBar from '../canvas/PresenceBar';
 
@@ -11,6 +12,8 @@ export default function CanvasArea() {
   const setActiveView = useCanvasStore((s) => s.setActiveView);
   const mutationError = useCanvasStore((s) => s.mutationError);
   const clearMutationError = useCanvasStore((s) => s.clearMutationError);
+  const lockDeniedMessage = useRealtimeStore((s) => s.lockDeniedMessage);
+  const setLockDeniedMessage = useRealtimeStore((s) => s.setLockDeniedMessage);
 
   return (
     <main className="relative flex h-full flex-1 flex-col overflow-hidden">
@@ -46,6 +49,20 @@ export default function CanvasArea() {
       <div className="flex-1 overflow-hidden">
         <FlowCanvas activeView={activeView} />
       </div>
+
+      {/* Lock denied toast */}
+      {lockDeniedMessage && (
+        <div className="absolute bottom-12 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 shadow">
+          <span>🔒 {lockDeniedMessage}</span>
+          <button
+            onClick={() => setLockDeniedMessage(null)}
+            className="ml-1 text-amber-500 hover:text-amber-700"
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Mutation error toast */}
       {mutationError && (

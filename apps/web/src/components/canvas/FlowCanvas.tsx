@@ -226,8 +226,19 @@ export default function FlowCanvas({ activeView }: Props) {
   const onNodeDragStop = useCallback(
     (_e: React.MouseEvent, node: RFNode) => {
       updateNodePosition(node.id, activeView, node.position);
+      // Reset lock timeout — user actively dragged the node
+      if (pageId) {
+        const socket = getSocket();
+        if (socket.connected) {
+          socket.emit(SOCKET_EVENTS.NODE_LOCK_HEARTBEAT, {
+            nodeId: node.id,
+            userId: userIdentity.userId,
+            pageId,
+          });
+        }
+      }
     },
-    [updateNodePosition, activeView],
+    [updateNodePosition, activeView, pageId],
   );
 
   const onConnect = useCallback(

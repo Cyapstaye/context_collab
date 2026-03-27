@@ -29,6 +29,7 @@ export const SOCKET_EVENTS = {
   NODE_LOCK: 'node:lock',
   NODE_UNLOCK: 'node:unlock',
   NODE_LOCK_DENIED: 'node:lock:denied',
+  NODE_LOCK_HEARTBEAT: 'node:lock:heartbeat',
   // canvas mutations (broadcast)
   NODE_CREATED: 'node:created',
   NODE_UPDATED: 'node:updated',
