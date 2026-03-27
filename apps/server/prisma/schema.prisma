@@ -93,3 +93,11 @@ model Edge {
   @@index([source])
   @@index([target])
 }
+
+// ─── App Config ───────────────────────────────────────────────────────────────
+
+model AppConfig {
+  key       String   @id
+  value     String   // JSON string
+  updatedAt DateTime @updatedAt
+}

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
+import { useDesignStore } from './store/designStore';
 import HomePage from './pages/HomePage';
 import ProjectPage from './pages/ProjectPage';
 import CanvasPage from './pages/CanvasPage';
@@ -9,10 +10,12 @@ import LoginPage from './pages/LoginPage';
 export default function App() {
   const init = useAuthStore((s) => s.init);
   const initializing = useAuthStore((s) => s.initializing);
+  const loadDesignSettings = useDesignStore((s) => s.load);
 
   useEffect(() => {
     init();
-  }, [init]);
+    loadDesignSettings();
+  }, [init, loadDesignSettings]);
 
   // Don't render routes until auth state is resolved to avoid flicker
   if (initializing) {

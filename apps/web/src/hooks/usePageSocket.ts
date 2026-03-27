@@ -47,10 +47,11 @@ export function usePageSocket(pageId: string | null): void {
       });
     }
 
+    // Use socket.on (not once) so that every reconnect (e.g. after login) also
+    // re-sends PAGE_JOIN with the latest identity/token.
+    socket.on('connect', joinRoom);
     if (socket.connected) {
       joinRoom();
-    } else {
-      socket.once('connect', joinRoom);
     }
 
     // Presence
@@ -77,12 +78,13 @@ export function usePageSocket(pageId: string | null): void {
       clearNodeLock(nodeId);
     });
     socket.on(SOCKET_EVENTS.NODE_LOCK_DENIED, ({ lockedBy }: { nodeId: string; lockedBy: string | null }) => {
-      // Revert local selection — lock was not granted
-      setSelectedNode(null);
       if (lockedBy === null) {
-        // Denied because the socket is view-only (should not normally surface here)
+        // The socket is view-only on the server (e.g. connected before login).
+        // A socket reconnect is in flight to fix this — don't deselect the node.
         return;
       }
+      // Revert local selection — lock was denied by a competing user
+      setSelectedNode(null);
       // Look up the lock holder's display name from current presence state
       const lockerEmail =
         useRealtimeStore.getState().presenceUsers.find((u) => u.userId === lockedBy)?.email ?? lockedBy;

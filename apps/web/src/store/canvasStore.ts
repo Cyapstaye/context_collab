@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { NodeType, ViewName, NodePositions } from '@context-collab/shared';
+import type { NodeType, ViewName, NodePositions, LabelDef } from '@context-collab/shared';
 import { api } from '../api';
 
 export interface CanvasNode {
@@ -37,7 +37,7 @@ interface CanvasStore {
   pageId: string | null;
   projectId: string | null;
   pageName: string | null;
-  pageLabels: string[];
+  pageLabels: LabelDef[];
   pageRelations: string[];
   nodes: CanvasNode[];
   edges: CanvasEdge[];
@@ -68,8 +68,11 @@ interface CanvasStore {
   updateEdgeWeight: (id: string, weight: number) => void;
   updateEdgeRelation: (id: string, relation: string) => void;
 
-  addPageLabel: (label: string) => void;
+  addPageLabel: (label: LabelDef) => void;
   addPageRelation: (relation: string) => void;
+
+  editingNodeId: string | null;
+  setEditingNodeId: (id: string | null) => void;
 
   setActiveView: (view: ViewName) => void;
   setSelectedNode: (id: string | null) => void;
@@ -143,6 +146,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   activeView: 'element',
   selectedNodeId: null,
   selectedEdgeId: null,
+  editingNodeId: null,
   loading: false,
   loadError: null,
   mutationError: null,
@@ -519,7 +523,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
 
   addPageLabel: (label) => {
     const { pageLabels, pageId, projectId } = get();
-    if (!label.trim() || pageLabels.includes(label)) return;
+    if (!label.name.trim() || pageLabels.some((l) => l.name === label.name)) return;
     const next = [...pageLabels, label];
     set({ pageLabels: next });
     if (!pageId || !projectId) return;
@@ -543,12 +547,16 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
     });
   },
 
+  setEditingNodeId: (id) => {
+    set({ editingNodeId: id });
+  },
+
   setActiveView: (view) => {
-    set({ activeView: view, selectedNodeId: null, selectedEdgeId: null });
+    set({ activeView: view, selectedNodeId: null, selectedEdgeId: null, editingNodeId: null });
   },
 
   setSelectedNode: (id) => {
-    set({ selectedNodeId: id, selectedEdgeId: null });
+    set({ selectedNodeId: id, selectedEdgeId: null, editingNodeId: null });
   },
 
   setSelectedEdge: (id) => {

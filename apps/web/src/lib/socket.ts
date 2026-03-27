@@ -64,3 +64,20 @@ export function connectSocket(): Socket {
   }
   return socket;
 }
+
+/**
+ * Force-reconnects the socket with the latest token from localStorage.
+ * Call this after login or logout so the server middleware re-runs with the
+ * updated (or cleared) JWT, updating socket.data.user server-side.
+ * The PAGE_JOIN re-send is handled by the `socket.on('connect', joinRoom)`
+ * listener registered in usePageSocket.
+ */
+export function reconnectSocket(): void {
+  const socket = getSocket();
+  const token = localStorage.getItem('collab:token');
+  socket.auth = { token: token ?? null };
+  if (socket.connected) {
+    socket.disconnect();
+  }
+  socket.connect();
+}

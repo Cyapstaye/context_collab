@@ -5,6 +5,7 @@ import { projectsRouter } from './routes/projects';
 import { pagesRouter } from './routes/pages';
 import { nodesRouter } from './routes/nodes';
 import { edgesRouter } from './routes/edges';
+import { settingsRouter } from './routes/settings';
 import { requireAuth } from './middleware/requireAuth';
 
 export function createApp() {
@@ -42,6 +43,7 @@ export function createApp() {
   });
 
   // API routes
+  app.use('/api/v1/settings', settingsRouter);
   app.use('/api/v1/projects', projectsRouter);
   app.use('/api/v1/projects/:projectId/pages', pagesRouter);
   app.use('/api/v1/pages/:pageId/nodes', nodesRouter);

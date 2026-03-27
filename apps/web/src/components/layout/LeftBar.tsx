@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useAuthStore } from '../../store/authStore';
@@ -23,9 +23,22 @@ export default function LeftBar({ projectId, pageId }: Props) {
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
   const addNode = useCanvasStore((s) => s.addNode);
   const selectNodeFromSidebar = useCanvasStore((s) => s.selectNodeFromSidebar);
+  const updateNodeName = useCanvasStore((s) => s.updateNodeName);
   const isViewOnly = useAuthStore((s) => s.isViewOnly());
 
   const [form, setForm] = useState<AddFormState>(CLOSED);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renamingValue, setRenamingValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const renameValueRef = useRef(renamingValue);
+  renameValueRef.current = renamingValue;
+
+  useEffect(() => {
+    if (renamingId) {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
+  }, [renamingId]);
   const [projectName, setProjectName] = useState<string>('');
   const [pageName, setPageName] = useState<string>('');
 
@@ -65,6 +78,26 @@ export default function LeftBar({ projectId, pageId }: Props) {
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') submitForm();
     if (e.key === 'Escape') setForm(CLOSED);
+  }
+
+  function startRename(nodeId: string, currentName: string) {
+    if (isViewOnly) return;
+    setRenamingId(nodeId);
+    setRenamingValue(currentName);
+    // Focus is handled by useEffect triggered by renamingId change
+  }
+
+  function commitRename() {
+    const trimmed = renameValueRef.current.trim();
+    if (renamingId && trimmed) {
+      updateNodeName(renamingId, trimmed);
+    }
+    setRenamingId(null);
+  }
+
+  function handleRenameKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+    if (e.key === 'Escape') { e.preventDefault(); setRenamingId(null); }
   }
 
   return (
@@ -138,14 +171,27 @@ export default function LeftBar({ projectId, pageId }: Props) {
                 <li
                   key={n.id}
                   onClick={() => selectNodeFromSidebar(n.id)}
+                  onDoubleClick={() => startRename(n.id, n.name)}
                   className={[
-                    'truncate rounded px-2 py-1 text-xs cursor-pointer',
+                    'rounded px-2 py-1 text-xs cursor-pointer',
                     selectedNodeId === n.id
                       ? 'bg-blue-100 text-blue-700 font-medium'
                       : 'text-gray-700 hover:bg-gray-100',
                   ].join(' ')}
                 >
-                  {n.name}
+                  {renamingId === n.id ? (
+                    <input
+                      ref={renameInputRef}
+                      className="w-full bg-transparent outline-none"
+                      value={renamingValue}
+                      onChange={(e) => setRenamingValue(e.target.value)}
+                      onKeyDown={handleRenameKeyDown}
+                      onBlur={commitRename}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="truncate block">{n.name}</span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -199,14 +245,27 @@ export default function LeftBar({ projectId, pageId }: Props) {
                 <li
                   key={n.id}
                   onClick={() => selectNodeFromSidebar(n.id)}
+                  onDoubleClick={() => startRename(n.id, n.name)}
                   className={[
-                    'truncate rounded px-2 py-1 text-xs cursor-pointer',
+                    'rounded px-2 py-1 text-xs cursor-pointer',
                     selectedNodeId === n.id
                       ? 'bg-amber-100 text-amber-700 font-medium'
                       : 'text-gray-700 hover:bg-gray-100',
                   ].join(' ')}
                 >
-                  {n.name}
+                  {renamingId === n.id ? (
+                    <input
+                      ref={renameInputRef}
+                      className="w-full bg-transparent outline-none"
+                      value={renamingValue}
+                      onChange={(e) => setRenamingValue(e.target.value)}
+                      onKeyDown={handleRenameKeyDown}
+                      onBlur={commitRename}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="truncate block">{n.name}</span>
+                  )}
                 </li>
               ))}
             </ul>

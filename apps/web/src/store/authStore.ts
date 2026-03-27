@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { reconnectSocket } from '../lib/socket';
 
 export interface AuthUser {
   id: string;
@@ -75,6 +76,11 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     _persistIdentity(user, token);
 
     set({ user, token });
+
+    // Reconnect the socket so the server middleware re-runs with the new JWT.
+    // This upgrades the socket from view-only (anonymous) to authenticated,
+    // enabling lock acquisition and collaborative editing.
+    reconnectSocket();
   },
 
   logout: () => {
@@ -82,6 +88,9 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     // Restore anonymous identity
     localStorage.removeItem('collab:user');
     set({ user: null, token: null });
+
+    // Reconnect without auth so the server drops the authenticated socket state.
+    reconnectSocket();
   },
 }));
 

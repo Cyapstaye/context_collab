@@ -22,12 +22,28 @@ function parsePositions(json: string) {
   try { return NodePositionsSchema.parse(JSON.parse(json)); } catch { return DEFAULT_POSITIONS; }
 }
 
+type LabelDef = { name: string; color: string };
+
+function mapPageLabels(json: string): LabelDef[] {
+  try {
+    const raw = JSON.parse(json);
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    // Backward compat: old format was string[]
+    if (typeof raw[0] === 'string') {
+      return (raw as string[]).map((name) => ({ name, color: '' }));
+    }
+    return raw as LabelDef[];
+  } catch {
+    return [];
+  }
+}
+
 function mapPage(p: Page) {
   return {
     id: p.id,
     projectId: p.projectId,
     name: p.name,
-    labels: parseJson<string[]>(p.labelsJson, []),
+    labels: mapPageLabels(p.labelsJson),
     relations: parseJson<string[]>(p.relationsJson, []),
     order: p.order,
     createdAt: p.createdAt.toISOString(),

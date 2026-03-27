@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+// ─── LabelDef ─────────────────────────────────────────────────────────────────
+
+export const LabelDefSchema = z.object({
+  name: z.string(),
+  color: z.string(),
+});
+
 // ─── Primitives ───────────────────────────────────────────────────────────────
 
 export const NodeTypeSchema = z.enum(['element', 'proposition']);
@@ -80,7 +87,7 @@ export const PageSchema = z.object({
   id: z.string(),
   projectId: z.string(),
   name: z.string().min(1),
-  labels: z.array(z.string()),
+  labels: z.array(LabelDefSchema),
   relations: z.array(z.string()), // page-level relation pool (used on edges)
   order: z.number().int(),
   createdAt: z.string(),
@@ -93,7 +100,7 @@ export const CreatePageSchema = z.object({
 
 export const UpdatePageSchema = z.object({
   name: z.string().min(1).optional(),
-  labels: z.array(z.string()).optional(),
+  labels: z.array(LabelDefSchema).optional(),
   relations: z.array(z.string()).optional(),
 });
 

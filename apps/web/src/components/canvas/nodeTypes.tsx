@@ -1,6 +1,8 @@
-import { memo } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
+import { useDesignStore } from '../../store/designStore';
+import { useCanvasStore } from '../../store/canvasStore';
 
 export type NodeData = {
   name: string;
@@ -9,122 +11,318 @@ export type NodeData = {
   crossType?: boolean;  // True when shown as context in a different view (detail view mix)
   lockedBy?: string;    // userId of lock holder (only set when locked by another user)
   lockedColor?: string; // display color of the lock holder
+  labelColors?: string[]; // hex colors for each label that has a color assigned
+  isWaypoint?: boolean; // True when this node is the active Option-click chain waypoint
 };
 
-// Element node — circle
+// Must match tailwind.config.ts canvas color
+const CANVAS_BG = '#f8f8f6';
+
+function LabelDots({ colors, diameter }: { colors: string[]; diameter?: number }) {
+  const ds = useDesignStore((s) => s.settings);
+  if (colors.length === 0) return null;
+
+  if (diameter !== undefined) {
+    const r = diameter / 2;
+    const outerR = r + ds.arcGap + ds.arcDotSize / 2;
+    const n = colors.length;
+    return (
+      <>
+        {colors.map((color, i) => {
+          const angleDeg = (i - (n - 1) / 2) * ds.arcAngleStep;
+          const angleRad = (angleDeg * Math.PI) / 180;
+          const cx = r + outerR * Math.cos(angleRad) - ds.arcDotSize / 2;
+          const cy = r + outerR * Math.sin(angleRad) - ds.arcDotSize / 2;
+          return (
+            <div
+              key={i}
+              className="absolute rounded-full border border-white shadow-sm"
+              style={{ width: ds.arcDotSize, height: ds.arcDotSize, backgroundColor: color, left: cx, top: cy, pointerEvents: 'none' }}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  return (
+    <div
+      className="absolute flex flex-col items-center gap-0.5"
+      style={{ right: -(ds.arcDotSize / 2 + 3), top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+    >
+      {colors.map((color, i) => (
+        <div
+          key={i}
+          className="rounded-full border border-white shadow-sm"
+          style={{ width: ds.arcDotSize, height: ds.arcDotSize, backgroundColor: color, flexShrink: 0 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Inline name editor (used inside both node types) ──────────────────────────
+function InlineNameInput({
+  nodeId,
+  initialName,
+  style,
+}: {
+  nodeId: string;
+  initialName: string;
+  style?: React.CSSProperties;
+}) {
+  const updateNodeName = useCanvasStore((s) => s.updateNodeName);
+  const setEditingNodeId = useCanvasStore((s) => s.setEditingNodeId);
+  const [value, setValue] = useState(initialName);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Keep latest value in a ref so onBlur always sees the current value
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  function commit() {
+    const trimmed = valueRef.current.trim();
+    if (trimmed && trimmed !== initialName) {
+      updateNodeName(nodeId, trimmed);
+    }
+    setEditingNodeId(null);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); setEditingNodeId(null); }
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      className="nodrag nopan bg-transparent outline-none text-center w-full"
+      style={style}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={handleKeyDown}
+      onBlur={commit}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+    />
+  );
+}
+
+// ── Element node — circle ──────────────────────────────────────────────────────
 export const ElementNode = memo(function ElementNode({
+  id,
   data,
   selected,
 }: NodeProps) {
   const d = data as NodeData;
   const diameter = Math.round(40 + d.size * 20);
-  const opacity = d.dimmed ? 0.2 : d.crossType ? 0.55 : 1;
+  const contentOpacity = d.dimmed ? 0.2 : d.crossType ? 0.55 : 1;
   const isLocked = !!d.lockedBy;
+  const isWaypoint = !!d.isWaypoint;
+  const isDashed = isLocked || !!d.crossType;
+
+  const ds = useDesignStore((s) => s.settings);
+  const editingNodeId = useCanvasStore((s) => s.editingNodeId);
+  const isEditing = id === editingNodeId && !d.dimmed && !isLocked;
+  const borderWidth = isLocked ? 2 : isWaypoint ? 3 : selected ? ds.selectedBorderWidth : ds.defaultBorderWidth;
+  const borderColor = isLocked
+    ? (d.lockedColor ?? '#888')
+    : isWaypoint
+      ? '#f97316'
+      : d.crossType
+        ? '#d1d5db'
+        : selected
+          ? ds.selectedBorderColor
+          : ds.defaultBorderColor;
+  const fontWeight = selected ? ds.selectedFontWeight : ds.defaultFontWeight;
 
   return (
+    // Outer wrapper: fixed size + rounded shape for shadow; NO opacity so shield stays opaque
     <div
-      style={{
-        width: diameter,
-        height: diameter,
-        opacity,
-        position: 'relative',
-        ...(isLocked ? { borderColor: d.lockedColor } : {}),
-      }}
+      style={{ width: diameter, height: diameter, position: 'relative' }}
       className={[
-        'flex items-center justify-center rounded-full border-2 bg-white text-center cursor-pointer',
-        isLocked
-          ? 'border-dashed'
+        'rounded-full cursor-pointer',
+        isWaypoint
+          ? 'shadow-lg shadow-orange-200'
           : selected
-            ? 'border-blue-500 shadow-lg'
-            : d.crossType
-              ? 'border-blue-300 border-dashed'
-              : 'border-gray-700',
+            ? 'shadow-[0_1px_3px_rgba(0,0,0,0.10),0_4px_10px_rgba(0,0,0,0.09),0_12px_28px_rgba(0,0,0,0.07),0_28px_56px_rgba(0,0,0,0.04)]'
+            : '',
       ].join(' ')}
     >
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="opacity-0 hover:opacity-100"
-      />
-      <span
-        className="leading-tight font-medium text-gray-800 px-1 break-words text-center"
-        style={{ fontSize: Math.max(9, Math.round(11 * d.size)) }}
+      {/* Canvas-bg shield — always fully opaque; masks edge SVG lines behind this node */}
+      <div className="absolute inset-0 rounded-full" style={{ backgroundColor: CANVAS_BG }} />
+
+      {/* Visual ring + content — opacity only here; inset box-shadow = inner border */}
+      <div
+        className="absolute inset-0 rounded-full bg-white flex items-center justify-center text-center"
+        style={{
+          opacity: contentOpacity,
+          ...(isDashed
+            ? { border: `${borderWidth}px dashed ${borderColor}` }
+            : { boxShadow: `inset 0 0 0 ${borderWidth}px ${borderColor}` }),
+        }}
       >
-        {d.name}
-      </span>
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="opacity-0 hover:opacity-100"
-      />
-      {isLocked && (
-        <div
-          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] text-white font-bold"
-          style={{ backgroundColor: d.lockedColor ?? '#888' }}
-          title={`Locked by ${d.lockedBy}`}
-        >
-          🔒
-        </div>
-      )}
+        {/* Handles at center — edges draw center-to-center, node bg visually trims the line */}
+        <Handle
+          type="target"
+          position={Position.Top}
+          style={{ opacity: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+        />
+        {isEditing ? (
+          <InlineNameInput
+            nodeId={id}
+            initialName={d.name}
+            style={{
+              fontSize: Math.max(9, Math.round(11 * d.size)),
+              fontWeight,
+              color: borderColor,
+              maxWidth: diameter - 16,
+            }}
+          />
+        ) : (
+          <span
+            className="leading-tight px-1 break-words text-center"
+            style={{
+              fontSize: Math.max(9, Math.round(11 * d.size)),
+              fontWeight,
+              color: d.crossType ? '#9ca3af' : borderColor,
+            }}
+          >
+            {d.name}
+          </span>
+        )}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          style={{ opacity: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+        />
+        {isLocked && (
+          <div
+            className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] text-white font-bold"
+            style={{ backgroundColor: d.lockedColor ?? '#888' }}
+            title={`Locked by ${d.lockedBy}`}
+          >
+            🔒
+          </div>
+        )}
+        {!isLocked && d.labelColors && <LabelDots colors={d.labelColors} diameter={diameter} />}
+        {isWaypoint && (
+          <div
+            className="absolute -top-1.5 -left-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] text-white font-bold"
+            style={{ backgroundColor: '#f97316' }}
+            title="Option-click waypoint"
+          >
+            ⌥
+          </div>
+        )}
+      </div>
     </div>
   );
 });
 
-// Proposition node — rounded rectangle
+// ── Proposition node — rounded rectangle ──────────────────────────────────────
 export const PropositionNode = memo(function PropositionNode({
+  id,
   data,
   selected,
 }: NodeProps) {
   const d = data as NodeData;
-  const opacity = d.dimmed ? 0.2 : d.crossType ? 0.55 : 1;
+  const contentOpacity = d.dimmed ? 0.2 : d.crossType ? 0.55 : 1;
   const fontSize = Math.max(9, Math.round(11 * d.size));
   const isLocked = !!d.lockedBy;
+  const isWaypoint = !!d.isWaypoint;
+  const isDashed = isLocked || !!d.crossType;
+
+  const ds = useDesignStore((s) => s.settings);
+  const editingNodeId = useCanvasStore((s) => s.editingNodeId);
+  const isEditing = id === editingNodeId && !d.dimmed && !isLocked;
+  const borderWidth = isLocked ? 2 : isWaypoint ? 3 : selected ? ds.selectedBorderWidth : ds.defaultBorderWidth;
+  const borderColor = isLocked
+    ? (d.lockedColor ?? '#888')
+    : isWaypoint
+      ? '#f97316'
+      : d.crossType
+        ? '#d1d5db'
+        : selected
+          ? ds.selectedBorderColor
+          : ds.defaultBorderColor;
+  const fontWeight = selected ? ds.selectedFontWeight : ds.defaultFontWeight;
 
   return (
+    // Outer wrapper: content-sized, rounded shape for shadow; NO opacity so shield stays opaque
     <div
-      style={{
-        opacity,
-        minWidth: 100,
-        maxWidth: 180,
-        position: 'relative',
-        ...(isLocked ? { borderColor: d.lockedColor } : {}),
-      }}
+      style={{ position: 'relative', minWidth: 100, maxWidth: 180 }}
       className={[
-        'flex items-center justify-center rounded-lg border-2 bg-amber-50 px-3 py-2 cursor-pointer',
-        isLocked
-          ? 'border-dashed'
+        'rounded-lg cursor-pointer',
+        isWaypoint
+          ? 'shadow-lg shadow-orange-200'
           : selected
-            ? 'border-amber-500 shadow-lg'
-            : d.crossType
-              ? 'border-amber-300 border-dashed'
-              : 'border-amber-700',
+            ? 'shadow-[0_1px_3px_rgba(0,0,0,0.10),0_4px_10px_rgba(0,0,0,0.09),0_12px_28px_rgba(0,0,0,0.07),0_28px_56px_rgba(0,0,0,0.04)]'
+            : '',
       ].join(' ')}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="opacity-0 hover:opacity-100"
-      />
-      <span
-        className="leading-snug font-medium text-amber-900 text-center break-words"
-        style={{ fontSize }}
+      {/* Canvas-bg shield */}
+      <div className="absolute inset-0 rounded-lg" style={{ backgroundColor: CANVAS_BG }} />
+
+      {/* Visual ring + content */}
+      <div
+        className="relative w-full rounded-lg bg-white px-3 py-2 flex items-center justify-center"
+        style={{
+          opacity: contentOpacity,
+          ...(isDashed
+            ? { border: `${borderWidth}px dashed ${borderColor}` }
+            : { boxShadow: `inset 0 0 0 ${borderWidth}px ${borderColor}` }),
+        }}
       >
-        {d.name}
-      </span>
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="opacity-0 hover:opacity-100"
-      />
-      {isLocked && (
-        <div
-          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] text-white font-bold"
-          style={{ backgroundColor: d.lockedColor ?? '#888' }}
-          title={`Locked by ${d.lockedBy}`}
-        >
-          🔒
-        </div>
-      )}
+        <Handle
+          type="target"
+          position={Position.Left}
+          style={{ opacity: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+        />
+        {isEditing ? (
+          <InlineNameInput
+            nodeId={id}
+            initialName={d.name}
+            style={{ fontSize, fontWeight, color: borderColor }}
+          />
+        ) : (
+          <span
+            className="leading-snug text-center break-words"
+            style={{ fontSize, fontWeight, color: d.crossType ? '#9ca3af' : borderColor }}
+          >
+            {d.name}
+          </span>
+        )}
+        <Handle
+          type="source"
+          position={Position.Right}
+          style={{ opacity: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+        />
+        {isLocked && (
+          <div
+            className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] text-white font-bold"
+            style={{ backgroundColor: d.lockedColor ?? '#888' }}
+            title={`Locked by ${d.lockedBy}`}
+          >
+            🔒
+          </div>
+        )}
+        {!isLocked && d.labelColors && <LabelDots colors={d.labelColors} />}
+        {isWaypoint && (
+          <div
+            className="absolute -top-1.5 -left-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] text-white font-bold"
+            style={{ backgroundColor: '#f97316' }}
+            title="Option-click waypoint"
+          >
+            ⌥
+          </div>
+        )}
+      </div>
     </div>
   );
 });

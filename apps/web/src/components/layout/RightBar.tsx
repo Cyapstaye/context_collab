@@ -1,34 +1,126 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Chrome } from '@uiw/react-color';
+import type { ColorResult } from '@uiw/react-color';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useRealtimeStore } from '../../store/realtimeStore';
 import { useAuthStore } from '../../store/authStore';
+import type { LabelDef } from '@context-collab/shared';
+
+// ── Color picker popover ───────────────────────────────────────────────────────
+
+interface ColorPickerPopoverProps {
+  labelName: string;
+  style?: React.CSSProperties;
+  onConfirm: (color: string) => void;
+  onCancel: () => void;
+}
+
+function ColorPickerPopover({ labelName, style, onConfirm, onCancel }: ColorPickerPopoverProps) {
+  const [color, setColor] = useState('#6366f1');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onCancel();
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onCancel]);
+
+  return (
+    <div
+      ref={ref}
+      className="rounded-lg shadow-xl border border-border bg-white p-3"
+      style={{ minWidth: 240, ...style }}
+    >
+      <p className="text-xs text-gray-500 mb-2">
+        Pick a color for <span className="font-semibold text-gray-700">"{labelName}"</span>
+      </p>
+      <Chrome
+        color={color}
+        onChange={(c: ColorResult) => setColor(c.hex)}
+        style={{ width: '100%', boxShadow: 'none', border: 'none' }}
+      />
+      <div className="flex gap-2 mt-3">
+        <button
+          type="button"
+          onClick={() => onConfirm(color)}
+          className="flex-1 rounded bg-blue-600 px-3 py-1 text-xs text-white font-medium hover:bg-blue-700"
+        >
+          Confirm
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded px-3 py-1 text-xs text-gray-500 hover:text-gray-700 border border-border"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ── Labels combobox ───────────────────────────────────────────────────────────
 // Multi-value: shows chips for current labels, input to add more
+
 interface LabelsComboboxProps {
   labels: string[];
-  suggestions: string[];
+  pageLabels: LabelDef[];
   disabled?: boolean;
   onChange: (labels: string[]) => void;
-  onNewLabel: (label: string) => void;
+  onNewLabel: (label: LabelDef) => void;
 }
 
-function LabelsCombobox({ labels, suggestions, disabled, onChange, onNewLabel }: LabelsComboboxProps) {
+function LabelsCombobox({ labels, pageLabels, disabled, onChange, onNewLabel }: LabelsComboboxProps) {
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
+  const [pendingLabel, setPendingLabel] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
+  // Portal positioning — recalculated each time dropdown or picker opens
+  const [dropPortalStyle, setDropPortalStyle] = useState<React.CSSProperties>({});
+  const [pickerPortalStyle, setPickerPortalStyle] = useState<React.CSSProperties>({});
 
+  const suggestions = pageLabels.map((l) => l.name);
   const filtered = suggestions.filter(
     (s) => !labels.includes(s) && s.toLowerCase().includes(input.toLowerCase()),
   );
 
-  function addLabel(label: string) {
-    const trimmed = label.trim();
-    if (!trimmed || labels.includes(trimmed)) return;
-    onNewLabel(trimmed);
-    onChange([...labels, trimmed]);
+  function addExistingLabel(name: string) {
+    if (labels.includes(name)) return;
+    onChange([...labels, name]);
     setInput('');
+    setOpen(false);
+  }
+
+  function requestNewLabel(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || labels.includes(trimmed)) return;
+    // If already in page vocabulary (with a color), just add it
+    if (pageLabels.some((l) => l.name === trimmed)) {
+      addExistingLabel(trimmed);
+      return;
+    }
+    // New label — show color picker
+    setOpen(false);
+    setPendingLabel(trimmed);
+    setInput('');
+  }
+
+  function handleColorConfirm(color: string) {
+    if (!pendingLabel) return;
+    const def: LabelDef = { name: pendingLabel, color };
+    onNewLabel(def);
+    onChange([...labels, pendingLabel]);
+    setPendingLabel(null);
+  }
+
+  function handleColorCancel() {
+    setPendingLabel(null);
   }
 
   function removeLabel(label: string) {
@@ -39,9 +131,9 @@ function LabelsCombobox({ labels, suggestions, disabled, onChange, onNewLabel }:
     if (e.key === 'Enter') {
       e.preventDefault();
       if (filtered.length > 0 && input) {
-        addLabel(filtered[0]);
+        addExistingLabel(filtered[0]);
       } else if (input.trim()) {
-        addLabel(input);
+        requestNewLabel(input);
       }
     } else if (e.key === 'Escape') {
       setOpen(false);
@@ -51,7 +143,23 @@ function LabelsCombobox({ labels, suggestions, disabled, onChange, onNewLabel }:
     }
   }
 
-  // Close on outside click
+  // Recalculate dropdown portal position each time it opens
+  useEffect(() => {
+    if (open && dropRef.current) {
+      const r = dropRef.current.getBoundingClientRect();
+      setDropPortalStyle({ position: 'fixed', top: r.bottom + 2, left: r.left, width: r.width, zIndex: 9999 });
+    }
+  }, [open]);
+
+  // Recalculate color picker portal position each time it appears
+  useEffect(() => {
+    if (pendingLabel !== null && dropRef.current) {
+      const r = dropRef.current.getBoundingClientRect();
+      setPickerPortalStyle({ position: 'fixed', top: r.bottom + 4, left: r.left, zIndex: 9999 });
+    }
+  }, [pendingLabel]);
+
+  // Close dropdown on outside click (but not if color picker is open)
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
@@ -62,6 +170,10 @@ function LabelsCombobox({ labels, suggestions, disabled, onChange, onNewLabel }:
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  function getLabelColor(name: string): string | undefined {
+    return pageLabels.find((l) => l.name === name)?.color;
+  }
+
   return (
     <div ref={dropRef} className="relative">
       <div
@@ -71,24 +183,33 @@ function LabelsCombobox({ labels, suggestions, disabled, onChange, onNewLabel }:
         ].join(' ')}
         onClick={() => { if (!disabled) inputRef.current?.focus(); }}
       >
-        {labels.map((l) => (
-          <span
-            key={l}
-            className="inline-flex items-center gap-0.5 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 font-medium"
-          >
-            {l}
-            {!disabled && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); removeLabel(l); }}
-                className="ml-0.5 text-blue-400 hover:text-blue-700 leading-none"
-                aria-label={`Remove ${l}`}
-              >
-                ×
-              </button>
-            )}
-          </span>
-        ))}
+        {labels.map((l) => {
+          const color = getLabelColor(l);
+          return (
+            <span
+              key={l}
+              className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-600"
+            >
+              {color && (
+                <span
+                  className="rounded-full inline-block flex-shrink-0"
+                  style={{ width: 6, height: 6, backgroundColor: color }}
+                />
+              )}
+              {l}
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeLabel(l); }}
+                  className="ml-0.5 opacity-60 hover:opacity-100 leading-none"
+                  aria-label={`Remove ${l}`}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          );
+        })}
         {!disabled && (
           <input
             ref={inputRef}
@@ -102,26 +223,44 @@ function LabelsCombobox({ labels, suggestions, disabled, onChange, onNewLabel }:
         )}
       </div>
 
-      {open && !disabled && (filtered.length > 0 || input.trim()) && (
-        <ul className="absolute z-50 mt-0.5 w-full rounded border border-border bg-white shadow-md max-h-40 overflow-y-auto">
-          {filtered.map((s) => (
-            <li
-              key={s}
-              onMouseDown={(e) => { e.preventDefault(); addLabel(s); }}
-              className="cursor-pointer px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
-            >
-              {s}
-            </li>
-          ))}
+      {open && !disabled && (filtered.length > 0 || input.trim()) && createPortal(
+        <ul style={dropPortalStyle} className="rounded border border-border bg-white shadow-md max-h-40 overflow-y-auto">
+          {filtered.map((s) => {
+            const color = getLabelColor(s);
+            return (
+              <li
+                key={s}
+                onMouseDown={(e) => { e.preventDefault(); addExistingLabel(s); }}
+                className="cursor-pointer px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 flex items-center gap-1.5"
+              >
+                {color
+                  ? <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, backgroundColor: color, display: 'inline-block' }} />
+                  : <span className="rounded-full flex-shrink-0 border border-gray-300" style={{ width: 8, height: 8, display: 'inline-block' }} />
+                }
+                {s}
+              </li>
+            );
+          })}
           {input.trim() && !suggestions.includes(input.trim()) && !labels.includes(input.trim()) && (
             <li
-              onMouseDown={(e) => { e.preventDefault(); addLabel(input.trim()); }}
+              onMouseDown={(e) => { e.preventDefault(); requestNewLabel(input.trim()); }}
               className="cursor-pointer px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 italic"
             >
               + Add "{input.trim()}"
             </li>
           )}
-        </ul>
+        </ul>,
+        document.body
+      )}
+
+      {pendingLabel !== null && createPortal(
+        <ColorPickerPopover
+          labelName={pendingLabel}
+          style={pickerPortalStyle}
+          onConfirm={handleColorConfirm}
+          onCancel={handleColorCancel}
+        />,
+        document.body
       )}
     </div>
   );
@@ -236,6 +375,7 @@ export default function RightBar() {
   const nodeLocks = useRealtimeStore((s) => s.nodeLocks);
   const presenceUsers = useRealtimeStore((s) => s.presenceUsers);
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const isViewOnly = useAuthStore((s) => s.isViewOnly());
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null;
   const selectedEdge = selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) : null;
@@ -251,19 +391,20 @@ export default function RightBar() {
     ? presenceUsers.find((u) => u.userId === lockedByUserId)
     : null;
 
+  const isOpen = !!(selectedNode || selectedEdge);
+
   return (
-    <aside className="flex h-full w-64 flex-shrink-0 flex-col border-l border-border bg-panel">
+    <aside
+      className={[
+        'absolute right-3 top-3 bottom-3 w-64 z-30',
+        'flex flex-col rounded-xl overflow-hidden bg-panel shadow-2xl',
+        'transition-transform duration-200 ease-in-out',
+        isOpen ? 'translate-x-0' : 'translate-x-[calc(100%+0.75rem)]',
+      ].join(' ')}
+    >
       <div className="border-b border-border px-4 py-3">
         <p className="text-xs font-medium text-gray-500">Properties</p>
       </div>
-
-      {!selectedNode && !selectedEdge && (
-        <div className="flex flex-1 items-center justify-center px-4">
-          <p className="text-center text-xs text-gray-400">
-            Select a node or edge to<br />view and edit its properties.
-          </p>
-        </div>
-      )}
 
       {selectedNode && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -276,7 +417,7 @@ export default function RightBar() {
             ].join(' ')}>
               {selectedNode.type === 'element' ? 'Element' : 'Proposition'}
             </span>
-            {!isLockedByOther && (
+            {!isLockedByOther && !isViewOnly && (
               <button
                 onClick={() => deleteNode(selectedNode.id)}
                 className="text-xs text-red-400 hover:text-red-600"
@@ -306,7 +447,7 @@ export default function RightBar() {
               className="mt-1 w-full rounded border border-border px-2 py-1 text-sm outline-none focus:border-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
               value={selectedNode.name}
               onChange={(e) => updateNodeName(selectedNode.id, e.target.value)}
-              disabled={isLockedByOther}
+              disabled={isLockedByOther || isViewOnly}
             />
           </label>
 
@@ -320,7 +461,7 @@ export default function RightBar() {
               className="mt-1 w-full disabled:opacity-40"
               value={selectedNode.size}
               onChange={(e) => updateNodeSize(selectedNode.id, parseFloat(e.target.value))}
-              disabled={isLockedByOther}
+              disabled={isLockedByOther || isViewOnly}
             />
           </label>
 
@@ -328,8 +469,8 @@ export default function RightBar() {
             <span className="text-xs text-gray-500 block mb-1">Labels</span>
             <LabelsCombobox
               labels={selectedNode.labels}
-              suggestions={pageLabels}
-              disabled={isLockedByOther}
+              pageLabels={pageLabels}
+              disabled={isLockedByOther || isViewOnly}
               onChange={(labels) => updateNodeLabels(selectedNode.id, labels)}
               onNewLabel={(label) => addPageLabel(label)}
             />
@@ -348,12 +489,14 @@ export default function RightBar() {
             <span className="rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
               Edge
             </span>
-            <button
-              onClick={() => deleteEdge(selectedEdge.id)}
-              className="text-xs text-red-400 hover:text-red-600"
-            >
-              Delete
-            </button>
+            {!isViewOnly && (
+              <button
+                onClick={() => deleteEdge(selectedEdge.id)}
+                className="text-xs text-red-400 hover:text-red-600"
+              >
+                Delete
+              </button>
+            )}
           </div>
 
           <div>
@@ -375,6 +518,7 @@ export default function RightBar() {
               className="mt-1 w-full"
               value={selectedEdge.weight}
               onChange={(e) => updateEdgeWeight(selectedEdge.id, parseFloat(e.target.value))}
+              disabled={isViewOnly}
             />
           </label>
 
@@ -383,6 +527,7 @@ export default function RightBar() {
             <RelationCombobox
               value={selectedEdge.relation}
               suggestions={pageRelations}
+              disabled={isViewOnly}
               onChange={(relation) => updateEdgeRelation(selectedEdge.id, relation)}
               onNewRelation={(relation) => addPageRelation(relation)}
             />

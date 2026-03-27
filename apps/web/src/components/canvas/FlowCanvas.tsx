@@ -18,6 +18,7 @@ import type {
 import '@xyflow/react/dist/style.css';
 
 import { useCanvasStore } from '../../store/canvasStore';
+import type { LabelDef } from '@context-collab/shared';
 import { useRealtimeStore } from '../../store/realtimeStore';
 import { useAuthStore } from '../../store/authStore';
 import { getSocket, getUserIdentity } from '../../lib/socket';
@@ -99,6 +100,7 @@ function RemoteCursors() {
 export default function FlowCanvas({ activeView }: Props) {
   const storeNodes = useCanvasStore((s) => s.nodes);
   const storeEdges = useCanvasStore((s) => s.edges);
+  const pageLabels = useCanvasStore((s) => s.pageLabels);
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
   const selectedEdgeId = useCanvasStore((s) => s.selectedEdgeId);
   const pageId = useCanvasStore((s) => s.pageId);
@@ -106,12 +108,19 @@ export default function FlowCanvas({ activeView }: Props) {
   const storeAddEdge = useCanvasStore((s) => s.addEdge);
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode);
   const setSelectedEdge = useCanvasStore((s) => s.setSelectedEdge);
+  const setEditingNodeId = useCanvasStore((s) => s.setEditingNodeId);
   const undo = useCanvasStore((s) => s.undo);
 
   const nodeLocks = useRealtimeStore((s) => s.nodeLocks);
   const presenceUsers = useRealtimeStore((s) => s.presenceUsers);
 
   const isViewOnly = useAuthStore((s) => s.isViewOnly());
+
+  // ── Option-click waypoint chain ──────────────────────────────────────────
+  // Holds the node ID of the last Option+clicked node. Each subsequent
+  // Option+click connects that node to the new click target, then advances
+  // the waypoint. Regular click or Escape clears the chain.
+  const [waypointId, setWaypointId] = useState<string | null>(null);
 
   // Which node types are visible per view
   const visibleNodeTypes = useMemo((): Array<'element' | 'proposition'> => {
@@ -162,12 +171,18 @@ export default function FlowCanvas({ activeView }: Props) {
           ? presenceUsers.find((u) => u.userId === lockedByUserId)
           : null;
 
+        const labelColors = n.labels
+          .map((name) => pageLabels.find((l: LabelDef) => l.name === name)?.color ?? '')
+          .filter((c) => c !== '');
+
         const data: NodeData = {
           name: n.name,
           size: n.size,
           dimmed,
           lockedBy: isLockedByOther ? lockedByUserId : undefined,
           lockedColor: lockerUser?.color,
+          labelColors: labelColors.length > 0 ? labelColors : undefined,
+          isWaypoint: n.id === waypointId,
         };
 
         return {
@@ -208,7 +223,7 @@ export default function FlowCanvas({ activeView }: Props) {
       });
 
     return [...primary, ...cross];
-  }, [storeNodes, activeView, visibleNodeTypes, selectedNodeId, connectedIds, crossTypeConnectedNodes, nodeLocks, presenceUsers, isViewOnly, identity.userId]);
+  }, [storeNodes, activeView, visibleNodeTypes, selectedNodeId, connectedIds, crossTypeConnectedNodes, nodeLocks, presenceUsers, isViewOnly, identity.userId, pageLabels, waypointId]);
 
   // Derive RF-format edges (between visible nodes including cross-type context)
   const derivedEdges = useMemo((): RFEdge[] => {
@@ -217,6 +232,7 @@ export default function FlowCanvas({ activeView }: Props) {
       .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
       .map((e) => ({
         id: e.id,
+        type: 'straight',
         source: e.source,
         target: e.target,
         label: e.relation || undefined,
@@ -232,7 +248,7 @@ export default function FlowCanvas({ activeView }: Props) {
 
   const nodeIdentityKey = storeNodes
     .filter((n) => visibleNodeTypes.includes(n.type as 'element' | 'proposition'))
-    .map((n) => `${n.id}:${n.name}:${n.size}`)
+    .map((n) => `${n.id}:${n.name}:${n.size}:${n.labels.join(',')}`)
     .join('|');
 
   const edgeDataKey = storeEdges
@@ -247,7 +263,7 @@ export default function FlowCanvas({ activeView }: Props) {
   useEffect(() => {
     setNodes(derivedNodes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, nodeIdentityKey, lockKey, isViewOnly, selectedNodeId, crossTypeKey]);
+  }, [activeView, nodeIdentityKey, lockKey, isViewOnly, selectedNodeId, crossTypeKey, waypointId]);
 
   useEffect(() => {
     setEdges(derivedEdges);
@@ -267,7 +283,10 @@ export default function FlowCanvas({ activeView }: Props) {
   }, [selectedEdgeId]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
-    setNodes((nds) => applyNodeChanges(changes, nds));
+    // Filter out 'select' changes — selection is controlled via our store + useEffect.
+    // Letting React Flow also apply select changes causes a race where a node gets
+    // immediately deselected after being selected.
+    setNodes((nds) => applyNodeChanges(changes.filter((c) => c.type !== 'select'), nds));
   }, []);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
@@ -304,10 +323,20 @@ export default function FlowCanvas({ activeView }: Props) {
   );
 
   const onNodeClick = useCallback(
-    (_e: React.MouseEvent, node: RFNode) => {
-      setSelectedNode(node.id);
+    (e: React.MouseEvent, node: RFNode) => {
+      if (!isViewOnly && e.altKey) {
+        // Option+click: chain-connect the previous waypoint to this node, then advance
+        if (waypointId && waypointId !== node.id) {
+          storeAddEdge(waypointId, node.id);
+        }
+        setWaypointId(node.id);
+        setSelectedNode(node.id);
+      } else {
+        setWaypointId(null);
+        setSelectedNode(node.id);
+      }
     },
-    [setSelectedNode],
+    [setSelectedNode, waypointId, storeAddEdge, isViewOnly],
   );
 
   const onEdgeClick = useCallback(
@@ -317,20 +346,31 @@ export default function FlowCanvas({ activeView }: Props) {
     [setSelectedEdge],
   );
 
+  const onNodeDoubleClick = useCallback(
+    (_e: React.MouseEvent, node: RFNode) => {
+      if (isViewOnly) return;
+      setEditingNodeId(node.id);
+    },
+    [isViewOnly, setEditingNodeId],
+  );
+
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
     setSelectedEdge(null);
+    setWaypointId(null);
   }, [setSelectedNode, setSelectedEdge]);
 
-  // ── cmd+Z undo ────────────────────────────────────────────────────────────
+  // ── cmd+Z undo / Escape to cancel waypoint chain ─────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
-        // Only fire if not typing in an input/textarea
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         e.preventDefault();
         undo();
+      }
+      if (e.key === 'Escape') {
+        setWaypointId(null);
       }
     };
     window.addEventListener('keydown', handler);
@@ -380,6 +420,7 @@ export default function FlowCanvas({ activeView }: Props) {
         onConnect={isViewOnly ? undefined : onConnect}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
@@ -388,6 +429,7 @@ export default function FlowCanvas({ activeView }: Props) {
         fitView
         fitViewOptions={{ padding: 0.3 }}
         className="bg-[#f8f8f6]"
+        defaultEdgeOptions={{ type: 'straight' }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e0e0e0" />
         <Controls />

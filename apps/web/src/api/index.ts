@@ -1,4 +1,4 @@
-import type { Project, Page, Node, Edge, NodePositions } from '@context-collab/shared';
+import type { Project, Page, Node, Edge, NodePositions, LabelDef, NodeStyleSettings } from '@context-collab/shared';
 
 const BASE = '/api/v1';
 
@@ -58,7 +58,7 @@ export const api = {
     req<Page>('POST', `/projects/${projectId}/pages`, data),
   getPage: (projectId: string, id: string) =>
     req<Page>('GET', `/projects/${projectId}/pages/${id}`),
-  updatePage: (projectId: string, id: string, data: { name?: string; labels?: string[]; relations?: string[] }) =>
+  updatePage: (projectId: string, id: string, data: { name?: string; labels?: LabelDef[]; relations?: string[] }) =>
     req<Page>('PATCH', `/projects/${projectId}/pages/${id}`, data),
   deletePage: (projectId: string, id: string) =>
     req<void>('DELETE', `/projects/${projectId}/pages/${id}`),
@@ -78,6 +78,11 @@ export const api = {
     req<Node>('PATCH', `/pages/${pageId}/nodes/${id}`, data),
   deleteNode: (pageId: string, id: string) =>
     req<void>('DELETE', `/pages/${pageId}/nodes/${id}`),
+
+  // Design settings
+  getDesignSettings: () => req<NodeStyleSettings>('GET', '/settings/design'),
+  saveDesignSettings: (data: NodeStyleSettings) =>
+    req<NodeStyleSettings>('PATCH', '/settings/design', data),
 
   // Edges
   listEdges: (pageId: string) =>
