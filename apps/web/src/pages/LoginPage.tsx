@@ -19,7 +19,7 @@ export default function LoginPage() {
       await login(email.trim(), password);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '로그인 실패');
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -28,15 +28,15 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas">
       <div className="w-full max-w-sm rounded-lg border border-border bg-panel p-8 shadow-sm">
-        <h1 className="mb-1 text-lg font-semibold text-gray-900">로그인</h1>
+        <h1 className="mb-1 text-lg font-semibold text-gray-900">Log in</h1>
         <p className="mb-6 text-xs text-gray-500">
-          허가된 사용자만 편집할 수 있습니다. 계정이 없으면 관리자에게 문의하세요.
+          Only authorized users can edit. Contact an administrator if you need an account.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-700" htmlFor="email">
-              이메일
+              Email
             </label>
             <input
               id="email"
@@ -52,7 +52,7 @@ export default function LoginPage() {
 
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-700" htmlFor="password">
-              비밀번호
+              Password
             </label>
             <input
               id="password"
@@ -77,7 +77,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
           >
-            {loading ? '로그인 중...' : '로그인'}
+            {loading ? 'Logging in...' : 'Log in'}
           </button>
         </form>
 
@@ -86,7 +86,7 @@ export default function LoginPage() {
             onClick={() => navigate(-1)}
             className="underline hover:text-gray-600"
           >
-            보기 전용으로 계속하기
+            Continue as view-only
           </button>
         </p>
       </div>

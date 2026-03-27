@@ -24,12 +24,12 @@ export default function CanvasArea() {
       {/* View-only banner */}
       {isViewOnly && (
         <div className="flex items-center justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-800 flex-shrink-0">
-          <span>보기 전용 모드 View-only — 편집하려면</span>
+          <span>View-only mode — to edit,</span>
           <button
             onClick={() => navigate('/login')}
             className="font-medium underline hover:text-amber-900"
           >
-            로그인하세요
+            log in
           </button>
         </div>
       )}
@@ -54,9 +54,9 @@ export default function CanvasArea() {
 
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-gray-400">
-            {activeView === 'layer' && '층위 뷰 — 동심원 가이드 표시'}
-            {activeView === 'element' && '요소 뷰 — 엣지 투명도 = 가중치'}
-            {activeView === 'proposition' && '명제 뷰 — 명제 노드만 표시'}
+            {activeView === 'layer' && 'Layer view — concentric depth rings'}
+            {activeView === 'element' && 'Element view — edge opacity = weight'}
+            {activeView === 'proposition' && 'Proposition view — propositions only'}
           </span>
           <PresenceBar />
         </div>
@@ -74,7 +74,7 @@ export default function CanvasArea() {
           <button
             onClick={() => setLockDeniedMessage(null)}
             className="ml-1 text-amber-500 hover:text-amber-700"
-            aria-label="닫기"
+            aria-label="Dismiss"
           >
             ✕
           </button>
@@ -88,7 +88,7 @@ export default function CanvasArea() {
           <button
             onClick={clearMutationError}
             className="ml-1 text-red-400 hover:text-red-600"
-            aria-label="닫기"
+            aria-label="Dismiss"
           >
             ✕
           </button>

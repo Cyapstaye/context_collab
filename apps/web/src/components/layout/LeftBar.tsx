@@ -75,7 +75,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
           onClick={() => navigate(`/projects/${projectId}`)}
           className="text-xs text-gray-400 hover:text-gray-600 mb-0.5 block text-left"
         >
-          ← 프로젝트
+          ← Project
         </button>
         <h2 className="truncate text-sm font-semibold text-gray-800">
           {projectName || projectId || '—'}
@@ -84,7 +84,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
 
       {/* Page */}
       <div className="border-b border-border px-4 py-3">
-        <p className="text-xs font-medium text-gray-500">페이지</p>
+        <p className="text-xs font-medium text-gray-500">Page</p>
         <p className="mt-0.5 truncate text-xs text-gray-600">{pageName || pageId || '—'}</p>
       </div>
 
@@ -94,13 +94,13 @@ export default function LeftBar({ projectId, pageId }: Props) {
         {/* Elements */}
         <section>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-gray-500">요소 Element</p>
+            <p className="text-xs font-medium text-gray-500">Element</p>
             {!isViewOnly && (
               <button
                 onClick={() => openForm('element')}
                 className="text-xs text-blue-500 hover:text-blue-700 font-medium"
               >
-                + 추가
+                + Add
               </button>
             )}
           </div>
@@ -112,7 +112,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 onKeyDown={handleKeyDown}
-                placeholder="이름..."
+                placeholder="Name..."
                 className="flex-1 rounded border border-blue-300 px-2 py-0.5 text-xs outline-none focus:border-blue-500"
               />
               <button
@@ -131,7 +131,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
           )}
 
           {elements.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">비어 있음</p>
+            <p className="text-xs text-gray-400 italic">Empty</p>
           ) : (
             <ul className="space-y-0.5">
               {elements.map((n) => (
@@ -155,13 +155,13 @@ export default function LeftBar({ projectId, pageId }: Props) {
         {/* Propositions */}
         <section>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-gray-500">명제 Proposition</p>
+            <p className="text-xs font-medium text-gray-500">Proposition</p>
             {!isViewOnly && (
               <button
                 onClick={() => openForm('proposition')}
                 className="text-xs text-amber-500 hover:text-amber-700 font-medium"
               >
-                + 추가
+                + Add
               </button>
             )}
           </div>
@@ -173,7 +173,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 onKeyDown={handleKeyDown}
-                placeholder="이름..."
+                placeholder="Name..."
                 className="flex-1 rounded border border-amber-300 px-2 py-0.5 text-xs outline-none focus:border-amber-500"
               />
               <button
@@ -192,7 +192,7 @@ export default function LeftBar({ projectId, pageId }: Props) {
           )}
 
           {propositions.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">비어 있음</p>
+            <p className="text-xs text-gray-400 italic">Empty</p>
           ) : (
             <ul className="space-y-0.5">
               {propositions.map((n) => (

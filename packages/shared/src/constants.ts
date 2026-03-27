@@ -1,9 +1,9 @@
-// View labels (Korean-first)
+// View labels
 export const VIEW_LABELS: Record<string, string> = {
-  element: '요소 기반',
-  proposition: '명제 기반',
-  layer: '층위 기반',
-  axis3d: '3D 축', // stub — hidden in v1
+  element: 'Element',
+  proposition: 'Proposition',
+  layer: 'Layer',
+  axis3d: '3D Axis', // stub — hidden in v1
 };
 
 // Default node size

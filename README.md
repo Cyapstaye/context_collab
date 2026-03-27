@@ -2,7 +2,7 @@
 
 Real-time collaborative knowledge-graph canvas for research and design teams.
 
-Korean-first UI. Built with React + Vite, Express, Prisma/SQLite, Socket.io (Phase 4).
+English UI. Built with React + Vite, Express, Prisma/SQLite, Socket.io (Phase 4).
 
 ---
 

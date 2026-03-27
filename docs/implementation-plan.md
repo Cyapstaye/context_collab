@@ -8,7 +8,7 @@
 - Prisma schema: User, Project, Page, Node, Edge (SQLite)
 - Express server skeleton with route stubs
 - Vite React app with three-panel canvas shell (LeftBar / CanvasArea / RightBar)
-- Korean-first UI labels in view switcher
+- English UI labels in view switcher
 - Docs: this file, api-contract.md, realtime-events.md
 
 ## Phase 2 — Single-user canvas
@@ -47,7 +47,7 @@
 - Detail view (in-place on select, connected nodes highlighted)
 - cmd+Z local undo stack
 - Left bar node/proposition click → select on canvas
-- Full Korean-first UI language pass
+- English UI language pass
 
 ## Phase 8 — Review
 - Bug pass, usability pass, cleanup

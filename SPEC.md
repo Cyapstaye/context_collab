@@ -106,15 +106,15 @@ Home → Project → Page → Views
 
 Each page has 3 main views + 1 optional, toggled via switcher bar at top of canvas.
 
-### 5a. 명제 기반 (Proposition view) — macro
+### 5a. Proposition view — macro
 - Propositions only visible, elements hidden
 - Nodes grouped/clustered by theme
 
-### 5b. 요소 기반 (Element view) — macro
+### 5b. Element view — macro
 - Elements only visible, propositions hidden
 - Edge opacity = weight value
 
-### 5c. 층위 기반 (Layer view) — macro
+### 5c. Layer view — macro
 - Elements only visible
 - One node designated as center
 - Other nodes arranged in concentric depth rings
@@ -123,7 +123,7 @@ Each page has 3 main views + 1 optional, toggled via switcher bar at top of canv
 - Hidden/disabled in UI
 - Implement last
 
-### 5e. 상세 뷰 (Detail view) — triggered on node select
+### 5e. Detail view — triggered on node select
 - Not a separate tab — activates in-place on canvas
 - Current macro view preserved; connected nodes highlighted
 - Shows selected node + all directly connected nodes (elements AND propositions mixed)
@@ -140,13 +140,13 @@ Each page has 3 main views + 1 optional, toggled via switcher bar at top of canv
 ### Left bar
 - Project name (top)
 - Pages list — + add, duplicate actions
-- 요소 list (all elements in current page)
-- 명제 list (all propositions in current page)
+- Element list (all elements in current page)
+- Proposition list (all propositions in current page)
 - Clicking any item → selects it on canvas
 - + button to add new node (choose type on create)
 
 ### Canvas
-- View switcher bar at top (명제 기반 · 요소 기반 · 층위 기반)
+- View switcher bar at top (Proposition · Element · Layer)
 - Multi-cursor: each user has a visible named cursor
 - Presence indicators: avatars/names of active users
 - Node interactions:
@@ -196,9 +196,7 @@ Each page has 3 main views + 1 optional, toggled via switcher bar at top of canv
 
 ## 10. UI language
 
-- Korean-first for labels and UI text
-- Technical terms shown with English annotation
-- e.g. "요소 Element", "명제 Proposition"
+- English for all labels and UI text
 
 ---
 
