@@ -57,7 +57,7 @@ interface CanvasStore {
   clearMutationError: () => void;
 
   addNode: (type: NodeType, name: string, position?: { x: number; y: number }) => Promise<void>;
-  updateNodePosition: (id: string, view: ViewName, pos: { x: number; y: number }) => void;
+  updateNodePosition: (id: string, view: ViewName, pos: { x: number; y: number } | null) => void;
   updateNodeName: (id: string, name: string) => void;
   updateNodeSize: (id: string, size: number) => void;
   updateNodeLabels: (id: string, labels: string[]) => void;
@@ -175,9 +175,8 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
           store.updateNodeLabels(entry.nodeId, entry.prev);
           break;
         case 'NODE_POSITION': {
-          if (entry.prev) {
-            store.updateNodePosition(entry.nodeId, entry.view, entry.prev);
-          }
+          // prev may be null (no position in that view) — always restore it
+          store.updateNodePosition(entry.nodeId, entry.view, entry.prev);
           break;
         }
         case 'EDGE_WEIGHT':
@@ -288,6 +287,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
         }),
       }));
     }
+    // pos may be null when undoing a first-placement (restores to "no position in this view")
     const mergedPositions: NodePositions = { ...node.positions, [view]: pos };
     set((s) => ({
       nodes: s.nodes.map((n) =>
@@ -524,7 +524,9 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
     set({ pageLabels: next });
     if (!pageId || !projectId) return;
     debounce('page-labels', 500, () => {
-      api.updatePage(projectId, pageId, { labels: next }).catch(() => {/* best-effort */});
+      api.updatePage(projectId, pageId, { labels: next }).catch((err) => {
+        console.error('[canvasStore] Failed to persist page labels:', err);
+      });
     });
   },
 
@@ -535,7 +537,9 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
     set({ pageRelations: next });
     if (!pageId || !projectId) return;
     debounce('page-relations', 500, () => {
-      api.updatePage(projectId, pageId, { relations: next }).catch(() => {/* best-effort */});
+      api.updatePage(projectId, pageId, { relations: next }).catch((err) => {
+        console.error('[canvasStore] Failed to persist page relations:', err);
+      });
     });
   },
 

@@ -61,3 +61,28 @@ The SPEC's non-allowlist viewer role requires a second user class (logged-in but
 ### Impact on later phases
 
 If a viewer role is ever needed, introduce a `role` field (already on the DB User model) and extend `isViewOnly()` accordingly. No structural rework required.
+
+---
+
+## Local-only undo — not conflict-aware in collaborative sessions (Session 7)
+
+**SPEC says (§ 6 canvas / § 7):** "cmd+Z → undo (local session stack only, not persisted, own actions only)"
+**Implemented as:** Client-local undo; no awareness of concurrent remote edits.
+
+### Accepted limitation
+
+Undo is intentionally local-only: each client maintains its own undo stack and never rebroadcasts undo as a collaborative event. This means:
+
+- A remote edit to the same node that occurs **between** a local action and its subsequent undo will be silently overwritten when the undo fires.
+- Example: User A moves node → User B also moves the same node → User A undoes → the node snaps back to User A's pre-move position, discarding User B's move.
+
+This is **accepted behaviour for v1**. The SPEC explicitly scopes undo to the local session stack only. A conflict-aware undo (e.g. operational transform or CRDT-based undo) is out of scope for v1.
+
+### Where this is implemented
+
+- `apps/web/src/store/canvasStore.ts` — `undoStack`, `_isUndoing`, `undo()`
+- The `_isUndoing` flag suppresses new undo-stack entries during replay, but does not prevent overwriting concurrent remote state.
+
+### If conflict-aware undo is needed in future
+
+Introduce a server-side operation log and implement OT/CRDT undo at that layer. The client undo stack would be replaced with server-round-tripped undo operations.

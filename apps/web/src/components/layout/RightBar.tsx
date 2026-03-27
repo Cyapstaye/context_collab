@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useRealtimeStore } from '../../store/realtimeStore';
-import { userIdentity } from '../../lib/socket';
+import { useAuthStore } from '../../store/authStore';
 
 // ── Labels combobox ───────────────────────────────────────────────────────────
 // Multi-value: shows chips for current labels, input to add more
@@ -235,6 +235,7 @@ export default function RightBar() {
 
   const nodeLocks = useRealtimeStore((s) => s.nodeLocks);
   const presenceUsers = useRealtimeStore((s) => s.presenceUsers);
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null;
   const selectedEdge = selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) : null;
@@ -245,7 +246,7 @@ export default function RightBar() {
 
   // Is the selected node locked by another user?
   const lockedByUserId = selectedNodeId ? nodeLocks[selectedNodeId] : undefined;
-  const isLockedByOther = !!lockedByUserId && lockedByUserId !== userIdentity.userId;
+  const isLockedByOther = !!lockedByUserId && lockedByUserId !== currentUserId;
   const lockerUser = isLockedByOther
     ? presenceUsers.find((u) => u.userId === lockedByUserId)
     : null;
