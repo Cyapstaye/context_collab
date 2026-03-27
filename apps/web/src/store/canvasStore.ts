@@ -52,6 +52,14 @@ interface CanvasStore {
   setSelectedNode: (id: string | null) => void;
   setSelectedEdge: (id: string | null) => void;
   selectNodeFromSidebar: (id: string) => void;
+
+  // Remote mutation appliers (called by socket event listeners)
+  applyRemoteNodeCreated: (node: CanvasNode) => void;
+  applyRemoteNodeUpdated: (node: Partial<CanvasNode> & { id: string }) => void;
+  applyRemoteNodeDeleted: (nodeId: string) => void;
+  applyRemoteEdgeCreated: (edge: CanvasEdge) => void;
+  applyRemoteEdgeUpdated: (edge: Partial<CanvasEdge> & { id: string }) => void;
+  applyRemoteEdgeDeleted: (edgeId: string) => void;
 }
 
 // Module-level debounce timer map — keyed by "<field>:<id>"
@@ -375,5 +383,53 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       const targetView: ViewName = node.type === 'proposition' ? 'proposition' : 'element';
       return { activeView: targetView, selectedNodeId: id, selectedEdgeId: null };
     });
+  },
+
+  // ── Remote mutation appliers ────────────────────────────────────────────────
+
+  applyRemoteNodeCreated: (node) => {
+    set((s) => {
+      if (s.nodes.some((n) => n.id === node.id)) {
+        // Already present (our own broadcast) — update with server data
+        return { nodes: s.nodes.map((n) => (n.id === node.id ? { ...n, ...node } : n)) };
+      }
+      return { nodes: [...s.nodes, node] };
+    });
+  },
+
+  applyRemoteNodeUpdated: (partial) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => (n.id === partial.id ? { ...n, ...partial } : n)),
+    }));
+  },
+
+  applyRemoteNodeDeleted: (nodeId) => {
+    set((s) => ({
+      nodes: s.nodes.filter((n) => n.id !== nodeId),
+      edges: s.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+      selectedNodeId: s.selectedNodeId === nodeId ? null : s.selectedNodeId,
+    }));
+  },
+
+  applyRemoteEdgeCreated: (edge) => {
+    set((s) => {
+      if (s.edges.some((e) => e.id === edge.id)) {
+        return { edges: s.edges.map((e) => (e.id === edge.id ? { ...e, ...edge } : e)) };
+      }
+      return { edges: [...s.edges, edge] };
+    });
+  },
+
+  applyRemoteEdgeUpdated: (partial) => {
+    set((s) => ({
+      edges: s.edges.map((e) => (e.id === partial.id ? { ...e, ...partial } : e)),
+    }));
+  },
+
+  applyRemoteEdgeDeleted: (edgeId) => {
+    set((s) => ({
+      edges: s.edges.filter((e) => e.id !== edgeId),
+      selectedEdgeId: s.selectedEdgeId === edgeId ? null : s.selectedEdgeId,
+    }));
   },
 }));

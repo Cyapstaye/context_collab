@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCanvasStore } from '../store/canvasStore';
+import { usePageSocket } from '../hooks/usePageSocket';
 import LeftBar from '../components/layout/LeftBar';
 import CanvasArea from '../components/layout/CanvasArea';
 import RightBar from '../components/layout/RightBar';
@@ -17,6 +18,9 @@ export default function CanvasPage() {
       loadPage(projectId, pageId);
     }
   }, [projectId, pageId, loadPage]);
+
+  // Connect to realtime room for this page
+  usePageSocket(pageId ?? null);
 
   if (loading) {
     return (

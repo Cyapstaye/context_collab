@@ -2,6 +2,7 @@ import { VIEW_LABELS } from '@context-collab/shared';
 import type { ViewName } from '@context-collab/shared';
 import { useCanvasStore } from '../../store/canvasStore';
 import FlowCanvas from '../canvas/FlowCanvas';
+import PresenceBar from '../canvas/PresenceBar';
 
 const VIEWS: ViewName[] = ['element', 'proposition', 'layer'];
 
@@ -31,11 +32,14 @@ export default function CanvasArea() {
         ))}
         {/* 3D axis — stub, hidden in v1 */}
 
-        <span className="ml-auto text-xs text-gray-400">
-          {activeView === 'layer' && '층위 뷰 — 동심원 가이드 표시'}
-          {activeView === 'element' && '요소 뷰 — 엣지 투명도 = 가중치'}
-          {activeView === 'proposition' && '명제 뷰 — 명제 노드만 표시'}
-        </span>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-gray-400">
+            {activeView === 'layer' && '층위 뷰 — 동심원 가이드 표시'}
+            {activeView === 'element' && '요소 뷰 — 엣지 투명도 = 가중치'}
+            {activeView === 'proposition' && '명제 뷰 — 명제 노드만 표시'}
+          </span>
+          <PresenceBar />
+        </div>
       </div>
 
       {/* React Flow canvas */}

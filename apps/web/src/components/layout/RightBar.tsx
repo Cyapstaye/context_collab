@@ -1,4 +1,6 @@
 import { useCanvasStore } from '../../store/canvasStore';
+import { useRealtimeStore } from '../../store/realtimeStore';
+import { userIdentity } from '../../lib/socket';
 
 export default function RightBar() {
   const nodes = useCanvasStore((s) => s.nodes);
@@ -12,8 +14,18 @@ export default function RightBar() {
   const updateEdgeRelation = useCanvasStore((s) => s.updateEdgeRelation);
   const deleteEdge = useCanvasStore((s) => s.deleteEdge);
 
+  const nodeLocks = useRealtimeStore((s) => s.nodeLocks);
+  const presenceUsers = useRealtimeStore((s) => s.presenceUsers);
+
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null;
   const selectedEdge = selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) : null;
+
+  // Is the selected node locked by another user?
+  const lockedByUserId = selectedNodeId ? nodeLocks[selectedNodeId] : undefined;
+  const isLockedByOther = !!lockedByUserId && lockedByUserId !== userIdentity.userId;
+  const lockerUser = isLockedByOther
+    ? presenceUsers.find((u) => u.userId === lockedByUserId)
+    : null;
 
   return (
     <aside className="flex h-full w-64 flex-shrink-0 flex-col border-l border-border bg-panel">
@@ -41,20 +53,37 @@ export default function RightBar() {
             ].join(' ')}>
               {selectedNode.type === 'element' ? '요소' : '명제'}
             </span>
-            <button
-              onClick={() => deleteNode(selectedNode.id)}
-              className="text-xs text-red-400 hover:text-red-600"
-            >
-              삭제
-            </button>
+            {!isLockedByOther && (
+              <button
+                onClick={() => deleteNode(selectedNode.id)}
+                className="text-xs text-red-400 hover:text-red-600"
+              >
+                삭제
+              </button>
+            )}
           </div>
+
+          {isLockedByOther && (
+            <div
+              className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs"
+              style={{
+                backgroundColor: (lockerUser?.color ?? '#888') + '22',
+                borderLeft: `3px solid ${lockerUser?.color ?? '#888'}`,
+              }}
+            >
+              <span style={{ color: lockerUser?.color ?? '#888' }}>
+                🔒 {lockerUser?.email ?? lockedByUserId} 편집 중
+              </span>
+            </div>
+          )}
 
           <label className="block">
             <span className="text-xs text-gray-500">이름 Name</span>
             <input
-              className="mt-1 w-full rounded border border-border px-2 py-1 text-sm outline-none focus:border-blue-400"
+              className="mt-1 w-full rounded border border-border px-2 py-1 text-sm outline-none focus:border-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
               value={selectedNode.name}
               onChange={(e) => updateNodeName(selectedNode.id, e.target.value)}
+              disabled={isLockedByOther}
             />
           </label>
 
@@ -65,9 +94,10 @@ export default function RightBar() {
               min="0.5"
               max="3"
               step="0.1"
-              className="mt-1 w-full"
+              className="mt-1 w-full disabled:opacity-40"
               value={selectedNode.size}
               onChange={(e) => updateNodeSize(selectedNode.id, parseFloat(e.target.value))}
+              disabled={isLockedByOther}
             />
           </label>
 

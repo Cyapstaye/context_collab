@@ -74,6 +74,13 @@ export interface ApiError {
 
 // ─── Realtime event payloads (Socket.io — Phase 4) ───────────────────────────
 
+export interface PageJoinPayload {
+  pageId: string;
+  userId: string;
+  email: string;
+  color: string;
+}
+
 export interface CursorPayload {
   userId: string;
   pageId: string;
@@ -85,10 +92,16 @@ export interface NodeLockPayload {
   nodeId: string;
   userId: string;
   locked: boolean;
+  pageId?: string;
 }
 
 export interface PresenceUser {
   userId: string;
   email: string;
   color: string;
+}
+
+export interface PresenceListPayload {
+  users: PresenceUser[];
+  locks: Array<{ nodeId: string; userId: string }>;
 }

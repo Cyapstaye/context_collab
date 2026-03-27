@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { CreateNodeSchema, UpdateNodeSchema, NodePositionsSchema } from '@context-collab/shared';
+import { CreateNodeSchema, UpdateNodeSchema, NodePositionsSchema, SOCKET_EVENTS } from '@context-collab/shared';
 import type { Node } from '@prisma/client';
+import { emitToPage } from '../socketManager';
 
 // Mounted at /api/v1/pages/:pageId/nodes
 export const nodesRouter = Router({ mergeParams: true });
@@ -67,7 +68,9 @@ nodesRouter.post('/', async (req: Request, res: Response) => {
         positionsJson: JSON.stringify(parsed.data.positions),
       },
     });
-    res.status(201).json({ data: mapNode(node) });
+    const mapped = mapNode(node);
+    emitToPage(req.params.pageId, SOCKET_EVENTS.NODE_CREATED, { node: mapped });
+    res.status(201).json({ data: mapped });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create node', statusCode: 500 });
@@ -107,7 +110,9 @@ nodesRouter.patch('/:id', async (req: Request, res: Response) => {
     }
 
     const node = await prisma.node.update({ where: { id }, data });
-    res.json({ data: mapNode(node) });
+    const mapped = mapNode(node);
+    emitToPage(pageId, SOCKET_EVENTS.NODE_UPDATED, { node: mapped });
+    res.json({ data: mapped });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update node', statusCode: 500 });
@@ -124,6 +129,7 @@ nodesRouter.delete('/:id', async (req: Request, res: Response) => {
       return;
     }
     await prisma.node.delete({ where: { id } });
+    emitToPage(pageId, SOCKET_EVENTS.NODE_DELETED, { nodeId: id });
     res.status(204).send();
   } catch (err) {
     console.error(err);

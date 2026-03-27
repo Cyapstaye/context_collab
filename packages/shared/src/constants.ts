@@ -15,8 +15,12 @@ export const NODE_LOCK_TIMEOUT_MS = 30_000;
 // API base path
 export const API_BASE = '/api/v1';
 
-// Socket.io events (Phase 4 placeholders)
+// Socket.io events (Phase 4)
 export const SOCKET_EVENTS = {
+  // room lifecycle
+  PAGE_JOIN: 'page:join',
+  PAGE_LEAVE: 'page:leave',
+  PRESENCE_LIST: 'presence:list',
   // presence
   USER_JOIN: 'user:join',
   USER_LEAVE: 'user:leave',
@@ -24,6 +28,7 @@ export const SOCKET_EVENTS = {
   // node lock
   NODE_LOCK: 'node:lock',
   NODE_UNLOCK: 'node:unlock',
+  NODE_LOCK_DENIED: 'node:lock:denied',
   // canvas mutations (broadcast)
   NODE_CREATED: 'node:created',
   NODE_UPDATED: 'node:updated',

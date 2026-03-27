@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { CreateEdgeSchema, UpdateEdgeSchema } from '@context-collab/shared';
+import { CreateEdgeSchema, UpdateEdgeSchema, SOCKET_EVENTS } from '@context-collab/shared';
 import type { Edge } from '@prisma/client';
+import { emitToPage } from '../socketManager';
 
 // Mounted at /api/v1/pages/:pageId/edges
 export const edgesRouter = Router({ mergeParams: true });
@@ -76,7 +77,9 @@ edgesRouter.post('/', async (req: Request, res: Response) => {
         relation: parsed.data.relation,
       },
     });
-    res.status(201).json({ data: mapEdge(edge) });
+    const mapped = mapEdge(edge);
+    emitToPage(req.params.pageId, SOCKET_EVENTS.EDGE_CREATED, { edge: mapped });
+    res.status(201).json({ data: mapped });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create edge', statusCode: 500 });
@@ -98,7 +101,9 @@ edgesRouter.patch('/:id', async (req: Request, res: Response) => {
       return;
     }
     const edge = await prisma.edge.update({ where: { id }, data: parsed.data });
-    res.json({ data: mapEdge(edge) });
+    const mapped = mapEdge(edge);
+    emitToPage(pageId, SOCKET_EVENTS.EDGE_UPDATED, { edge: mapped });
+    res.json({ data: mapped });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update edge', statusCode: 500 });
@@ -115,6 +120,7 @@ edgesRouter.delete('/:id', async (req: Request, res: Response) => {
       return;
     }
     await prisma.edge.delete({ where: { id } });
+    emitToPage(pageId, SOCKET_EVENTS.EDGE_DELETED, { edgeId: id });
     res.status(204).send();
   } catch (err) {
     console.error(err);
