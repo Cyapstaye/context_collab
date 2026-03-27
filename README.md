@@ -85,6 +85,16 @@ context_collab/
 
 ---
 
+## Access control (v1 permission model)
+
+- **Authenticated users** (admin-seeded via `pnpm seed:user`) → full edit access
+- **Unauthenticated users** (not logged in) → view-only, cannot edit or lock nodes
+- No self-registration. All users are seeded via CLI.
+
+> Note: SPEC §8 mentions a "non-allowlist viewer" role. In v1 this is narrowed to "unauthenticated viewer" — all seeded users have edit access. See `docs/deviations.md` for rationale.
+
+---
+
 ## Build phases
 
 See `docs/implementation-plan.md` and `SPEC.md §11` for the full phase roadmap.

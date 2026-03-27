@@ -32,3 +32,32 @@ Only the client-side editing path is implemented. Phase 6 items still outstandin
 ### Impact on later phases
 
 Phase 6 in the build order should be treated as **partially complete**. The remaining work is the combobox UI and backend write-through, not the slider/input editing already present.
+
+---
+
+## v1 permission model narrowing (Session 5 / 5.5)
+
+**SPEC says (§ 8):** "Non-allowlist users: view-only, cannot interact"
+**Implemented as:** "Unauthenticated users: view-only, cannot interact"
+
+### What was narrowed
+
+SPEC describes a two-tier authenticated model: allowlist users get edit access, non-allowlist authenticated users get view-only. v1 collapses this to a single authenticated tier:
+
+- **Seeded/authenticated users** (any user who can log in) → full edit access
+- **Unauthenticated users** (not logged in) → view-only
+
+There is no concept of an "authenticated viewer" in v1. The allowlist is the login list — all seeded users have edit access.
+
+### Why this is an approved narrowing
+
+The SPEC's non-allowlist viewer role requires a second user class (logged-in but read-only). Since all users are admin-seeded via CLI (§ 8), and self-registration is out of scope, there is no mechanism to produce authenticated non-editors in v1. The narrowing is logically sound for the current scope.
+
+### Where this is enforced
+
+- `apps/web/src/store/authStore.ts` — `isViewOnly()` returns `user === null`
+- `apps/server/src/socketManager.ts` — unauthenticated sockets cannot acquire node locks
+
+### Impact on later phases
+
+If a viewer role is ever needed, introduce a `role` field (already on the DB User model) and extend `isViewOnly()` accordingly. No structural rework required.

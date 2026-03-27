@@ -12,7 +12,10 @@ interface AuthStore {
   // True until init() has resolved (prevents flash of login page)
   initializing: boolean;
 
-  // Derived: user is view-only if not logged in
+  // Derived: v1 permission model —
+  //   authenticated (seeded/logged-in) users → full edit access
+  //   unauthenticated (not logged in)          → view-only
+  // There is no "authenticated viewer" role in v1.
   isViewOnly: () => boolean;
 
   init: () => Promise<void>;

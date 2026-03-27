@@ -2,17 +2,18 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { comparePassword, signToken } from '../lib/auth';
 import { requireAuth } from '../middleware/requireAuth';
+import { LoginSchema } from '@context-collab/shared';
 
 export const authRouter = Router();
 
 // POST /api/v1/auth/login
 authRouter.post('/login', async (req, res) => {
-  const { email, password } = req.body as { email?: string; password?: string };
-
-  if (!email || !password) {
+  const parsed = LoginSchema.safeParse(req.body);
+  if (!parsed.success) {
     res.status(400).json({ error: 'Bad Request', message: 'email and password are required', statusCode: 400 });
     return;
   }
+  const { email, password } = parsed.data;
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {

@@ -93,8 +93,15 @@ export function setupSocket(httpServer: HTTPServer): Server {
 
     // ── page:join ─────────────────────────────────────────────────────────────
     socket.on(SOCKET_EVENTS.PAGE_JOIN, (payload: PageJoinPayload) => {
-      const { pageId, userId, email, color } = payload;
+      const { pageId, color } = payload;
       const roomName = `page:${pageId}`;
+
+      // For authenticated sockets, derive identity from the verified JWT —
+      // never trust client-supplied userId/email (v1 permission model:
+      // authenticated = edit access, unauthenticated = view-only).
+      const verified = getSocketUser(socket);
+      const userId = verified ? verified.id : payload.userId;
+      const email  = verified ? verified.email : payload.email;
 
       socket.join(roomName);
       socketPage.set(socket.id, pageId);
@@ -145,9 +152,12 @@ export function setupSocket(httpServer: HTTPServer): Server {
     // ── node:lock:heartbeat ───────────────────────────────────────────────────
     socket.on(SOCKET_EVENTS.NODE_LOCK_HEARTBEAT, (payload: { nodeId: string; userId: string; pageId: string }) => {
       // View-only sockets cannot hold locks
-      if (!getSocketUser(socket)) return;
+      const verified = getSocketUser(socket);
+      if (!verified) return;
 
-      const { nodeId, userId, pageId } = payload;
+      const { nodeId, pageId } = payload;
+      // Always use verified identity — ignore client-supplied userId
+      const userId = verified.id;
       if (socketPage.get(socket.id) !== pageId) return;
       const lock = locks.get(nodeId);
       if (lock && lock.userId === userId && lock.socketId === socket.id) {
@@ -158,14 +168,18 @@ export function setupSocket(httpServer: HTTPServer): Server {
 
     // ── node:lock ─────────────────────────────────────────────────────────────
     socket.on(SOCKET_EVENTS.NODE_LOCK, (payload: { nodeId: string; userId: string; pageId: string }) => {
-      const { nodeId, userId, pageId } = payload;
+      const { nodeId, pageId } = payload;
       const roomName = `page:${pageId}`;
 
       // View-only sockets cannot acquire locks
-      if (!getSocketUser(socket)) {
+      const verified = getSocketUser(socket);
+      if (!verified) {
         socket.emit(SOCKET_EVENTS.NODE_LOCK_DENIED, { nodeId, lockedBy: null });
         return;
       }
+
+      // Always use verified identity — ignore client-supplied userId
+      const userId = verified.id;
 
       // Validate the requesting socket is actually in the claimed page room
       if (socketPage.get(socket.id) !== pageId) return;
@@ -197,8 +211,11 @@ export function setupSocket(httpServer: HTTPServer): Server {
 
     // ── node:unlock ───────────────────────────────────────────────────────────
     socket.on(SOCKET_EVENTS.NODE_UNLOCK, (payload: { nodeId: string; userId: string; pageId: string }) => {
-      const { nodeId, userId } = payload;
+      const { nodeId } = payload;
       const lock = locks.get(nodeId);
+      // For authenticated sockets, use verified identity; allow anon fallback
+      const verified = getSocketUser(socket);
+      const userId = verified ? verified.id : payload.userId;
       if (lock && lock.userId === userId) {
         releaseLock(nodeId);
       }
