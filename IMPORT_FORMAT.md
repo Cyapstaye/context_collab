@@ -156,8 +156,8 @@ Edges are directional connections between two nodes.
 |-------------|-----------------|----------|-------------|-------|
 | `id`        | string          | yes      | —           | Ignored on import. Edges are deduplicated by source–target pair, not by ID. |
 | `pageId`    | string          | yes      | —           | Ignored on import. |
-| `source`    | string          | yes      | —           | ID of the source node. Must match a node `id` present in this file (or already on the target page). |
-| `target`    | string          | yes      | —           | ID of the target node. Same rules as `source`. |
+| `source`    | string          | yes      | ≠ `target`  | ID of the source node. Must match a node `id` present in this file (or already on the target page). **Must not equal `target`** — self-loops are invalid and will be skipped on import. |
+| `target`    | string          | yes      | ≠ `source`  | ID of the target node. Same rules as `source`. |
 | `weight`    | number          | yes      | 0.1 – 1.2   | Visual strength of the connection. Default `0.5`. Controls opacity on the canvas. |
 | `relation`  | string          | yes      | see below   | Encodes the connection type and direction. Default `""`. See [Relation strings](#relation-strings). |
 | `createdAt` | ISO 8601 string | yes      | —           | Ignored on import. |
@@ -286,6 +286,7 @@ A two-node map with one connection:
 | `node.name`      | Min 1 character |
 | `node.type`      | `"element"` or `"proposition"` |
 | `node.size`      | `0.1` – `10.0` |
+| `edge.source`    | Must not equal `edge.target` — self-loops are skipped |
 | `edge.weight`    | `0.1` – `1.2` |
 | `edge.relation`  | One of the strings in the table above, or `""` |
 | All `id` fields  | Any non-empty string (UUIDs or slugs both work) |

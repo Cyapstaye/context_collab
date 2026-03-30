@@ -5,15 +5,15 @@ import { api } from "../api";
 export const DEFAULT_DESIGN_SETTINGS: NodeStyleSettings = {
   defaultBorderWidth: 1,
   defaultBorderColor: "#374151",
-  defaultFontWeight: 400,
+  defaultFontWeight: 300,
   selectedBorderWidth: 2,
   selectedBorderColor: "#374151",
-  selectedFontWeight: 600,
-  arcGap: 10,
+  selectedFontWeight: 500,
+  arcGap: 4,
   arcDotSize: 8,
   arcAngleStep: 18,
   edgeFontSize: 11,
-  edgeOpacity: 1,
+  edgeOpacity: 0.55,
 };
 
 interface DesignStore {
@@ -38,7 +38,9 @@ export const useDesignStore = create<DesignStore>()((set, get) => ({
   load: async () => {
     try {
       const { data } = await api.getDesignSettings();
-      set({ settings: data, savedSettings: data });
+      // Merge with defaults so any fields added after initial DB save are present
+      const merged = { ...DEFAULT_DESIGN_SETTINGS, ...data };
+      set({ settings: merged, savedSettings: merged });
     } catch {
       // keep defaults
     }

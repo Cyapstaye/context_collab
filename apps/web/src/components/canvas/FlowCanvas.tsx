@@ -31,6 +31,7 @@ import type { NodeData } from './nodeTypes';
 import { connEdgeTypes } from './edgeTypes';
 import type { ViewName } from '@context-collab/shared';
 import { useForceLayout } from '../../hooks/useForceLayout';
+import type { ForceConfig } from '../../hooks/useForceLayout';
 import { edgeVisualProps } from '../../lib/connectionTypes';
 
 interface Props {
@@ -272,6 +273,14 @@ export default function FlowCanvas({ activeView }: Props) {
 
   // Edges for the force simulation (only between currently visible nodes)
   const visibleIds = useMemo(() => new Set(derivedNodes.map((n) => n.id)), [derivedNodes]);
+
+  // Cross-type context node IDs — frozen in physics so selecting a node with
+  // cross-type connections doesn't yank primary nodes toward stored positions.
+  const crossTypeNodeIds = useMemo(
+    () => new Set(crossTypeConnectedNodes.map((n) => n.id)),
+    [crossTypeConnectedNodes],
+  );
+
   const simEdges = useMemo(
     () =>
       storeEdges
@@ -285,7 +294,14 @@ export default function FlowCanvas({ activeView }: Props) {
   const [edges, setEdges] = useState<RFEdge[]>(derivedEdges);
 
   // Force-directed layout simulation
-  const { pin, unpin } = useForceLayout(simEdges, setNodes);
+  // Proposition nodes are ~320 px wide so the physics needs a much larger rest
+  // distance to prevent cards from overlapping and burying their connecting edges.
+  const forceConfig = useMemo((): ForceConfig | undefined => {
+    if (activeView !== 'proposition') return undefined;
+    return { restDistance: 450, repelMax: 700, repelStrength: 12000 };
+  }, [activeView]);
+
+  const { pin, unpin } = useForceLayout(simEdges, setNodes, crossTypeNodeIds, forceConfig);
 
   const labelFilterKey = `${focusedLabel ?? ''}|${[...hiddenLabels].sort().join(',')}|${showNameOverlay}`;
 
@@ -324,22 +340,19 @@ export default function FlowCanvas({ activeView }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, nodeIdentityKey, lockKey, isViewOnly, selectedNodeId, crossTypeKey, waypointId, labelFilterKey]);
 
+  // Sync edge state whenever the derived set changes for ANY reason —
+  // using derivedEdges directly as the dep so view switches, node visibility
+  // changes, label filters, and cross-type context updates all propagate.
+  // (derivedEdges already encodes storeEdges + visibleIds + selectedEdgeId.)
   useEffect(() => {
     setEdges(derivedEdges);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [edgeDataKey, activeView, selectedNodeId, crossTypeKey]);
+  }, [derivedEdges]);
 
   useEffect(() => {
     setNodes((nds) =>
       nds.map((n) => ({ ...n, selected: n.id === selectedNodeId })),
     );
   }, [selectedNodeId]);
-
-  useEffect(() => {
-    setEdges((eds) =>
-      eds.map((e) => ({ ...e, selected: e.id === selectedEdgeId })),
-    );
-  }, [selectedEdgeId]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     // Filter out 'select' changes — selection is controlled via our store + useEffect.
@@ -349,7 +362,11 @@ export default function FlowCanvas({ activeView }: Props) {
   }, []);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    setEdges((eds) => applyEdgeChanges(changes, eds));
+    // Filter out 'remove' changes — edge deletion goes through store.deleteEdge()
+    // (called from RightBar). Letting React Flow also apply removes causes edges to
+    // disappear from local state without being deleted on the server, and can
+    // ghost-remove valid edges during view transitions.
+    setEdges((eds) => applyEdgeChanges(changes.filter((c) => c.type !== 'remove'), eds));
   }, []);
 
   const onNodeDragStart = useCallback(
@@ -510,6 +527,7 @@ export default function FlowCanvas({ activeView }: Props) {
         edgeTypes={connEdgeTypes}
         nodesDraggable={!isViewOnly}
         nodesConnectable={false}
+        deleteKeyCode={null}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         className="bg-[#f8f8f6]"

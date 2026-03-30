@@ -62,6 +62,8 @@ function buildGlyphs(
 
 export const ConnEdge = memo(function ConnEdge({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -80,6 +82,9 @@ export const ConnEdge = memo(function ConnEdge({
   const color    = selected ? "#3b82f6" : "#374151";
   const dist     = Math.hypot(targetX - sourceX, targetY - sourceY);
   const angleDeg = Math.atan2(targetY - sourceY, targetX - sourceX) * (180 / Math.PI);
+
+  // Self-loop guard — source === target should never exist, but render nothing if it does
+  if (source === target) return null;
 
   // Invisible wide line for hit area
   const hitArea = (

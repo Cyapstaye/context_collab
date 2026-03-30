@@ -608,6 +608,51 @@ export default function RightBar() {
             <span className="text-xs text-gray-500">ID</span>
             <p className="mt-0.5 text-xs text-gray-400 font-mono">{selectedNode.id}</p>
           </div>
+
+          {/* Connections */}
+          {(() => {
+            const nodeEdges = edges.filter(
+              (e) => e.source === selectedNode.id || e.target === selectedNode.id,
+            );
+            if (nodeEdges.length === 0) return null;
+            return (
+              <div>
+                <span className="text-xs text-gray-500 block mb-1.5">Connections</span>
+                <div className="space-y-1">
+                  {nodeEdges.map((e) => {
+                    const isSource = e.source === selectedNode.id;
+                    const otherId = isSource ? e.target : e.source;
+                    const otherNode = nodes.find((n) => n.id === otherId);
+                    const { type, dir } = parseRelation(e.relation);
+                    const typeLabel = CONN_TYPES.find((t) => t.value === type)?.label ?? 'None';
+                    const hasDir = type === 'positive' || type === 'negative';
+                    const dirSymbol = hasDir
+                      ? (DIRECTIONS.find((d) => d.value === dir)?.label ?? '→')
+                      : null;
+                    return (
+                      <div
+                        key={e.id}
+                        className="flex items-center justify-between gap-2 rounded bg-gray-50 px-2 py-1.5"
+                      >
+                        <span
+                          className="text-xs text-gray-700 truncate"
+                          title={otherNode?.name ?? otherId}
+                        >
+                          {otherNode?.name ?? otherId}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-gray-400 flex items-center gap-0.5">
+                          {typeLabel}
+                          {dirSymbol && (
+                            <span className="ml-0.5 font-medium text-gray-500">{dirSymbol}</span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

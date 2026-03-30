@@ -130,10 +130,12 @@ export default function ImportModal({ onClose }: Props) {
         });
       }
 
-      // Process edges — resolve IDs through the map, skip duplicates
+      // Process edges — resolve IDs through the map, skip duplicates and self-loops
       for (const edge of edges) {
         const sourceId = idMap.get(edge.source) ?? edge.source;
         const targetId = idMap.get(edge.target) ?? edge.target;
+
+        if (sourceId === targetId) continue; // skip self-loops
 
         const alreadyExists = useCanvasStore.getState().edges.some(
           (e) =>

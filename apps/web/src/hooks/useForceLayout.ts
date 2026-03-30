@@ -18,15 +18,30 @@ const DAMP = 0.78; // velocity multiplier per tick (< 1 = decay toward rest)
 const MAX_V = 30; // velocity clamp — raised so weight > 1.0 is never capped
 const MIN_D = 30; // minimum distance to avoid division near zero
 
+export interface ForceConfig {
+  /** Natural spring rest length (px). Default: REST (180). Increase for wider nodes. */
+  restDistance?: number;
+  /** Repulsion cutoff distance (px). Default: REPEL_MAX (400). */
+  repelMax?: number;
+  /** Repulsion strength multiplier. Default: REPEL (6000). */
+  repelStrength?: number;
+}
+
 export function useForceLayout(
   edges: SimEdge[],
-  setNodes: React.Dispatch<React.SetStateAction<RFNode[]>>
+  setNodes: React.Dispatch<React.SetStateAction<RFNode[]>>,
+  frozenIds?: Set<string>,
+  config?: ForceConfig,
 ) {
   const velRef = useRef<Map<string, { vx: number; vy: number }>>(new Map());
   const pinnedRef = useRef<Set<string>>(new Set());
-  // Keep edges current without restarting the RAF loop
+  // Keep edges and frozenIds current without restarting the RAF loop
   const edgesRef = useRef<SimEdge[]>(edges);
   edgesRef.current = edges;
+  const frozenRef = useRef<Set<string>>(frozenIds ?? new Set());
+  frozenRef.current = frozenIds ?? new Set();
+  const configRef = useRef<ForceConfig>(config ?? {});
+  configRef.current = config ?? {};
 
   useEffect(() => {
     let frameId: number;
@@ -38,6 +53,10 @@ export function useForceLayout(
         const vels = velRef.current;
         const es = edgesRef.current;
         const pinned = pinnedRef.current;
+        const cfg = configRef.current;
+        const repelStrength = cfg.repelStrength ?? REPEL;
+        const repelMax     = cfg.repelMax     ?? REPEL_MAX;
+        const restDistance = cfg.restDistance ?? REST;
 
         // Sync velocity map: add new nodes, remove gone ones
         nds.forEach((n) => {
@@ -56,19 +75,22 @@ export function useForceLayout(
 
         // Repulsion — every pair pushes each other away, up to REPEL_MAX distance.
         // Force scales with each node's size (like mass in gravity).
+        // Frozen nodes (cross-type context ghosts) are excluded entirely.
+        const frozen = frozenRef.current;
         for (let i = 0; i < nds.length; i++) {
           for (let j = i + 1; j < nds.length; j++) {
             const a = nds[i],
               b = nds[j];
+            if (frozen.has(a.id) || frozen.has(b.id)) continue;
             const dx = b.position.x - a.position.x;
             const dy = b.position.y - a.position.y;
             const d = Math.hypot(dx, dy);
-            if (d > REPEL_MAX) continue;
+            if (d > repelMax) continue;
             const dc = Math.max(d, MIN_D);
             const mass =
               ((a.data as { size?: number }).size ?? 1) *
               ((b.data as { size?: number }).size ?? 1);
-            const f = (REPEL * mass) / (dc * dc);
+            const f = (repelStrength * mass) / (dc * dc);
             const ux = dx / dc,
               uy = dy / dc;
             fx.set(a.id, fx.get(a.id)! - ux * f);
@@ -80,15 +102,17 @@ export function useForceLayout(
 
         // Attraction — edges act as springs; stronger weight = stronger pull.
         // weight range is 0–1.2; force scales linearly so 1.2 pulls 20% harder than 1.0.
+        // Skip edges where either endpoint is frozen (cross-type context node).
         const pos = new Map(nds.map((n) => [n.id, n.position]));
         for (const e of es) {
+          if (frozen.has(e.source) || frozen.has(e.target)) continue;
           const pa = pos.get(e.source),
             pb = pos.get(e.target);
           if (!pa || !pb) continue;
           const dx = pb.x - pa.x,
             dy = pb.y - pa.y;
           const d = Math.max(Math.hypot(dx, dy), MIN_D);
-          const f = SPRING * (d - REST) * e.weight;
+          const f = SPRING * (d - restDistance) * e.weight;
           const ux = dx / d,
             uy = dy / d;
           fx.set(e.source, (fx.get(e.source) ?? 0) + ux * f);
@@ -99,7 +123,7 @@ export function useForceLayout(
 
         // Integrate velocities and move nodes
         return nds.map((n) => {
-          if (pinned.has(n.id)) return n;
+          if (pinned.has(n.id) || frozen.has(n.id)) return n;
           const vel = vels.get(n.id)!;
           vel.vx = Math.max(
             -MAX_V,

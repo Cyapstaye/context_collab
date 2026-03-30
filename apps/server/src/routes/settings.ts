@@ -10,15 +10,15 @@ const ADMIN_EMAIL = "livetobe@naver.com";
 export const DEFAULT_DESIGN_SETTINGS = {
   defaultBorderWidth: 1,
   defaultBorderColor: "#374151",
-  defaultFontWeight: 400,
+  defaultFontWeight: 300,
   selectedBorderWidth: 2,
   selectedBorderColor: "#374151",
-  selectedFontWeight: 600,
-  arcGap: 10,
+  selectedFontWeight: 500,
+  arcGap: 4,
   arcDotSize: 8,
   arcAngleStep: 18,
   edgeFontSize: 11,
-  edgeOpacity: 1,
+  edgeOpacity: 0.55,
 };
 
 // GET /api/v1/settings/design — public
@@ -31,7 +31,9 @@ settingsRouter.get("/design", async (_req, res) => {
     return;
   }
   try {
-    res.json({ data: JSON.parse(config.value) });
+    // Merge with defaults so any fields added after initial DB save are present
+    const merged = { ...DEFAULT_DESIGN_SETTINGS, ...JSON.parse(config.value) };
+    res.json({ data: merged });
   } catch {
     res.json({ data: DEFAULT_DESIGN_SETTINGS });
   }

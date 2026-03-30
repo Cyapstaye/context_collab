@@ -426,6 +426,7 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   addEdge: async (source, target) => {
     const { pageId, edges } = get();
     if (!pageId) return;
+    if (source === target) return; // self-loops not allowed
     const exists = edges.some(
       (e) =>
         (e.source === source && e.target === target) ||
