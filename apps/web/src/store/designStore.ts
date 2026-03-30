@@ -1,17 +1,19 @@
-import { create } from 'zustand';
-import type { NodeStyleSettings } from '@context-collab/shared';
-import { api } from '../api';
+import { create } from "zustand";
+import type { NodeStyleSettings } from "@context-collab/shared";
+import { api } from "../api";
 
 export const DEFAULT_DESIGN_SETTINGS: NodeStyleSettings = {
   defaultBorderWidth: 1,
-  defaultBorderColor: '#374151',
+  defaultBorderColor: "#374151",
   defaultFontWeight: 400,
   selectedBorderWidth: 2,
-  selectedBorderColor: '#374151',
+  selectedBorderColor: "#374151",
   selectedFontWeight: 600,
   arcGap: 10,
   arcDotSize: 8,
   arcAngleStep: 18,
+  edgeFontSize: 11,
+  edgeOpacity: 1,
 };
 
 interface DesignStore {

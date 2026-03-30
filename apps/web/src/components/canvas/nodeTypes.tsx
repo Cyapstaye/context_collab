@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { useDesignStore } from '../../store/designStore';
@@ -13,6 +13,8 @@ export type NodeData = {
   lockedColor?: string; // display color of the lock holder
   labelColors?: string[]; // hex colors for each label that has a color assigned
   isWaypoint?: boolean; // True when this node is the active Option-click chain waypoint
+  labelFocusColor?: string;  // set when a label is focused — use this color for border + glow
+  showNameOverlay?: boolean; // always show name as floating text over the compact node
 };
 
 // Must match tailwind.config.ts canvas color
@@ -120,7 +122,8 @@ export const ElementNode = memo(function ElementNode({
   selected,
 }: NodeProps) {
   const d = data as NodeData;
-  const diameter = Math.round(40 + d.size * 20);
+  const [hovered, setHovered] = useState(false);
+  const diameter = Math.max(6, Math.round((40 + d.size * 20) * 0.3));
   const contentOpacity = d.dimmed ? 0.2 : d.crossType ? 0.55 : 1;
   const isLocked = !!d.lockedBy;
   const isWaypoint = !!d.isWaypoint;
@@ -129,30 +132,39 @@ export const ElementNode = memo(function ElementNode({
   const ds = useDesignStore((s) => s.settings);
   const editingNodeId = useCanvasStore((s) => s.editingNodeId);
   const isEditing = id === editingNodeId && !d.dimmed && !isLocked;
-  const borderWidth = isLocked ? 2 : isWaypoint ? 3 : selected ? ds.selectedBorderWidth : ds.defaultBorderWidth;
+  const borderWidth = isLocked ? 2 : isWaypoint ? 3 : (selected || d.labelFocusColor) ? ds.selectedBorderWidth : ds.defaultBorderWidth;
   const borderColor = isLocked
     ? (d.lockedColor ?? '#888')
     : isWaypoint
       ? '#f97316'
       : d.crossType
         ? '#d1d5db'
-        : selected
-          ? ds.selectedBorderColor
-          : ds.defaultBorderColor;
+        : d.labelFocusColor
+          ? d.labelFocusColor
+          : selected
+            ? ds.selectedBorderColor
+            : ds.defaultBorderColor;
   const fontWeight = selected ? ds.selectedFontWeight : ds.defaultFontWeight;
+
+  const outerShadow = isWaypoint
+    ? 'shadow-lg shadow-orange-200'
+    : d.labelFocusColor
+      ? undefined  // applied inline so we can use the dynamic color
+      : selected
+        ? 'shadow-[0_0_3px_rgba(0,0,0,0.10),0_0_10px_rgba(0,0,0,0.09),0_0_28px_rgba(0,0,0,0.07),0_0_56px_rgba(0,0,0,0.04)]'
+        : '';
 
   return (
     // Outer wrapper: fixed size + rounded shape for shadow; NO opacity so shield stays opaque
     <div
-      style={{ width: diameter, height: diameter, position: 'relative' }}
-      className={[
-        'rounded-full cursor-pointer',
-        isWaypoint
-          ? 'shadow-lg shadow-orange-200'
-          : selected
-            ? 'shadow-[0_1px_3px_rgba(0,0,0,0.10),0_4px_10px_rgba(0,0,0,0.09),0_12px_28px_rgba(0,0,0,0.07),0_28px_56px_rgba(0,0,0,0.04)]'
-            : '',
-      ].join(' ')}
+      style={{
+        width: diameter, height: diameter, position: 'relative',
+        overflow: 'visible',
+        ...(d.labelFocusColor ? { boxShadow: `0 0 6px 2px ${d.labelFocusColor}40, 0 0 20px 4px ${d.labelFocusColor}25` } : {}),
+      }}
+      className={['rounded-full cursor-pointer', outerShadow ?? ''].join(' ')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {/* Canvas-bg shield — always fully opaque; masks edge SVG lines behind this node */}
       <div className="absolute inset-0 rounded-full" style={{ backgroundColor: CANVAS_BG }} />
@@ -173,34 +185,28 @@ export const ElementNode = memo(function ElementNode({
           position={Position.Top}
           style={{ opacity: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
         />
-        {isEditing ? (
-          <InlineNameInput
-            nodeId={id}
-            initialName={d.name}
-            style={{
-              fontSize: Math.max(9, Math.round(11 * d.size)),
-              fontWeight,
-              color: borderColor,
-              maxWidth: diameter - 16,
-            }}
-          />
-        ) : (
-          <span
-            className="leading-tight px-1 break-words text-center"
-            style={{
-              fontSize: Math.max(9, Math.round(11 * d.size)),
-              fontWeight,
-              color: d.crossType ? '#9ca3af' : borderColor,
-            }}
-          >
-            {d.name}
-          </span>
-        )}
         <Handle
           type="source"
           position={Position.Bottom}
           style={{ opacity: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
         />
+        {(d.showNameOverlay || hovered || selected) && (
+          <div
+            className="pointer-events-none"
+            style={{
+              position: 'absolute',
+              left: '50%', top: '50%',
+              transform: 'translate(-50%, -50%)',
+              whiteSpace: 'nowrap',
+              fontSize: 11,
+              fontWeight: 500,
+              color: borderColor,
+              zIndex: 50,
+            }}
+          >
+            {d.name}
+          </div>
+        )}
         {isLocked && (
           <div
             className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] text-white font-bold"
@@ -232,6 +238,7 @@ export const PropositionNode = memo(function PropositionNode({
   selected,
 }: NodeProps) {
   const d = data as NodeData;
+  const [hovered, setHovered] = useState(false);
   const contentOpacity = d.dimmed ? 0.2 : d.crossType ? 0.55 : 1;
   const fontSize = Math.max(9, Math.round(11 * d.size));
   const isLocked = !!d.lockedBy;
@@ -241,37 +248,46 @@ export const PropositionNode = memo(function PropositionNode({
   const ds = useDesignStore((s) => s.settings);
   const editingNodeId = useCanvasStore((s) => s.editingNodeId);
   const isEditing = id === editingNodeId && !d.dimmed && !isLocked;
-  const borderWidth = isLocked ? 2 : isWaypoint ? 3 : selected ? ds.selectedBorderWidth : ds.defaultBorderWidth;
+  const borderWidth = isLocked ? 2 : isWaypoint ? 3 : (selected || d.labelFocusColor) ? ds.selectedBorderWidth : ds.defaultBorderWidth;
   const borderColor = isLocked
     ? (d.lockedColor ?? '#888')
     : isWaypoint
       ? '#f97316'
       : d.crossType
         ? '#d1d5db'
-        : selected
-          ? ds.selectedBorderColor
-          : ds.defaultBorderColor;
+        : d.labelFocusColor
+          ? d.labelFocusColor
+          : selected
+            ? ds.selectedBorderColor
+            : ds.defaultBorderColor;
   const fontWeight = selected ? ds.selectedFontWeight : ds.defaultFontWeight;
+
+  const outerShadow = isWaypoint
+    ? 'shadow-lg shadow-orange-200'
+    : d.labelFocusColor
+      ? undefined
+      : selected
+        ? 'shadow-[0_0_3px_rgba(0,0,0,0.10),0_0_10px_rgba(0,0,0,0.09),0_0_28px_rgba(0,0,0,0.07),0_0_56px_rgba(0,0,0,0.04)]'
+        : '';
 
   return (
     // Outer wrapper: content-sized, rounded shape for shadow; NO opacity so shield stays opaque
     <div
-      style={{ position: 'relative', minWidth: 100, maxWidth: 180 }}
-      className={[
-        'rounded-lg cursor-pointer',
-        isWaypoint
-          ? 'shadow-lg shadow-orange-200'
-          : selected
-            ? 'shadow-[0_1px_3px_rgba(0,0,0,0.10),0_4px_10px_rgba(0,0,0,0.09),0_12px_28px_rgba(0,0,0,0.07),0_28px_56px_rgba(0,0,0,0.04)]'
-            : '',
-      ].join(' ')}
+      style={{
+        position: 'relative',
+        width: 12, height: 12, minWidth: 0, maxWidth: 'none', overflow: 'visible',
+        ...(d.labelFocusColor ? { boxShadow: `0 0 6px 2px ${d.labelFocusColor}40, 0 0 20px 4px ${d.labelFocusColor}25` } : {}),
+      }}
+      className={['rounded-lg cursor-pointer', outerShadow ?? ''].join(' ')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {/* Canvas-bg shield */}
       <div className="absolute inset-0 rounded-lg" style={{ backgroundColor: CANVAS_BG }} />
 
       {/* Visual ring + content */}
       <div
-        className="relative w-full rounded-lg bg-white px-3 py-2 flex items-center justify-center"
+        className="relative w-full rounded-lg bg-white flex items-center justify-center"
         style={{
           opacity: contentOpacity,
           ...(isDashed
@@ -284,25 +300,28 @@ export const PropositionNode = memo(function PropositionNode({
           position={Position.Left}
           style={{ opacity: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
         />
-        {isEditing ? (
-          <InlineNameInput
-            nodeId={id}
-            initialName={d.name}
-            style={{ fontSize, fontWeight, color: borderColor }}
-          />
-        ) : (
-          <span
-            className="leading-snug text-center break-words"
-            style={{ fontSize, fontWeight, color: d.crossType ? '#9ca3af' : borderColor }}
-          >
-            {d.name}
-          </span>
-        )}
         <Handle
           type="source"
           position={Position.Right}
           style={{ opacity: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
         />
+        {(d.showNameOverlay || hovered || selected) && (
+          <div
+            className="pointer-events-none"
+            style={{
+              position: 'absolute',
+              left: '50%', top: '50%',
+              transform: 'translate(-50%, -50%)',
+              whiteSpace: 'nowrap',
+              fontSize: 11,
+              fontWeight: 500,
+              color: borderColor,
+              zIndex: 50,
+            }}
+          >
+            {d.name}
+          </div>
+        )}
         {isLocked && (
           <div
             className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] text-white font-bold"

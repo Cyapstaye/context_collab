@@ -1,17 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { NodeStyleSettings } from '@context-collab/shared';
-import { useDesignStore, DEFAULT_DESIGN_SETTINGS } from '../../store/designStore';
+import { useState, useEffect, useCallback } from "react";
+import type { NodeStyleSettings } from "@context-collab/shared";
+import {
+  useDesignStore,
+  DEFAULT_DESIGN_SETTINGS,
+} from "../../store/designStore";
 
 interface AdminPanelProps {
   onClose: () => void;
 }
 
 const FONT_WEIGHT_OPTIONS = [
-  { value: 300, label: 'Light (300)' },
-  { value: 400, label: 'Normal (400)' },
-  { value: 500, label: 'Medium (500)' },
-  { value: 600, label: 'Semibold (600)' },
-  { value: 700, label: 'Bold (700)' },
+  { value: 300, label: "Light (300)" },
+  { value: 400, label: "Normal (400)" },
+  { value: 500, label: "Medium (500)" },
+  { value: 600, label: "Semibold (600)" },
+  { value: 700, label: "Bold (700)" },
 ];
 
 export default function AdminPanel({ onClose }: AdminPanelProps) {
@@ -33,13 +36,19 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
   }, []);
 
   // Apply draft changes to canvas in real-time
-  const update = useCallback(<K extends keyof NodeStyleSettings>(key: K, value: NodeStyleSettings[K]) => {
-    setDraft((prev) => {
-      const next = { ...prev, [key]: value };
-      preview(next);
-      return next;
-    });
-  }, [preview]);
+  const update = useCallback(
+    <K extends keyof NodeStyleSettings>(
+      key: K,
+      value: NodeStyleSettings[K]
+    ) => {
+      setDraft((prev) => {
+        const next = { ...prev, [key]: value };
+        preview(next);
+        return next;
+      });
+    },
+    [preview]
+  );
 
   async function handleSave() {
     setSaving(true);
@@ -48,7 +57,7 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch {
-      alert('Failed to save — check you are logged in as admin.');
+      alert("Failed to save — check you are logged in as admin.");
     } finally {
       setSaving(false);
     }
@@ -77,7 +86,12 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
           aria-label="Close admin panel"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path
+              d="M1 1l12 12M13 1L1 13"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
           </svg>
         </button>
       </div>
@@ -95,13 +109,13 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
                 {[1, 2, 3].map((w) => (
                   <button
                     key={w}
-                    onClick={() => update('defaultBorderWidth', w)}
+                    onClick={() => update("defaultBorderWidth", w)}
                     className={[
-                      'flex h-6 w-8 items-center justify-center rounded text-[10px] font-medium transition-colors',
+                      "flex h-6 w-8 items-center justify-center rounded text-[10px] font-medium transition-colors",
                       draft.defaultBorderWidth === w
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                    ].join(' ')}
+                        ? "bg-gray-900 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                    ].join(" ")}
                   >
                     {w}px
                   </button>
@@ -112,18 +126,22 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
             <FieldRow label="Border color">
               <ColorInput
                 value={draft.defaultBorderColor}
-                onChange={(v) => update('defaultBorderColor', v)}
+                onChange={(v) => update("defaultBorderColor", v)}
               />
             </FieldRow>
 
             <FieldRow label="Font weight">
               <select
                 value={draft.defaultFontWeight}
-                onChange={(e) => update('defaultFontWeight', Number(e.target.value))}
+                onChange={(e) =>
+                  update("defaultFontWeight", Number(e.target.value))
+                }
                 className="w-full rounded border border-border bg-white px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-300"
               >
                 {FONT_WEIGHT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
                 ))}
               </select>
             </FieldRow>
@@ -140,25 +158,61 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
           <div className="space-y-2">
             <FieldRow label={`Gap from node edge — ${draft.arcGap}px`}>
               <input
-                type="range" min={4} max={30} step={1}
+                type="range"
+                min={4}
+                max={30}
+                step={1}
                 value={draft.arcGap}
-                onChange={(e) => update('arcGap', Number(e.target.value))}
+                onChange={(e) => update("arcGap", Number(e.target.value))}
                 className="w-full"
               />
             </FieldRow>
             <FieldRow label={`Dot size — ${draft.arcDotSize}px`}>
               <input
-                type="range" min={4} max={16} step={1}
+                type="range"
+                min={4}
+                max={16}
+                step={1}
                 value={draft.arcDotSize}
-                onChange={(e) => update('arcDotSize', Number(e.target.value))}
+                onChange={(e) => update("arcDotSize", Number(e.target.value))}
                 className="w-full"
               />
             </FieldRow>
             <FieldRow label={`Dot spacing — ${draft.arcAngleStep}°`}>
               <input
-                type="range" min={8} max={40} step={2}
+                type="range"
+                min={8}
+                max={40}
+                step={2}
                 value={draft.arcAngleStep}
-                onChange={(e) => update('arcAngleStep', Number(e.target.value))}
+                onChange={(e) => update("arcAngleStep", Number(e.target.value))}
+                className="w-full"
+              />
+            </FieldRow>
+          </div>
+        </section>
+
+        <div className="border-t border-border" />
+
+        {/* Edge glyphs */}
+        <section>
+          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+            Connections
+          </h3>
+          <div className="space-y-2">
+            <FieldRow label={`Glyph size — ${draft.edgeFontSize}px`}>
+              <input
+                type="range" min={7} max={20} step={1}
+                value={draft.edgeFontSize}
+                onChange={(e) => update("edgeFontSize", Number(e.target.value))}
+                className="w-full"
+              />
+            </FieldRow>
+            <FieldRow label={`Opacity — ${Math.round((draft.edgeOpacity ?? 1) * 100)}%`}>
+              <input
+                type="range" min={0.05} max={1} step={0.05}
+                value={draft.edgeOpacity ?? 1}
+                onChange={(e) => update("edgeOpacity", Number(e.target.value))}
                 className="w-full"
               />
             </FieldRow>
@@ -178,13 +232,13 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
                 {[1, 2, 3].map((w) => (
                   <button
                     key={w}
-                    onClick={() => update('selectedBorderWidth', w)}
+                    onClick={() => update("selectedBorderWidth", w)}
                     className={[
-                      'flex h-6 w-8 items-center justify-center rounded text-[10px] font-medium transition-colors',
+                      "flex h-6 w-8 items-center justify-center rounded text-[10px] font-medium transition-colors",
                       draft.selectedBorderWidth === w
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                    ].join(' ')}
+                        ? "bg-gray-900 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                    ].join(" ")}
                   >
                     {w}px
                   </button>
@@ -195,18 +249,22 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
             <FieldRow label="Border color">
               <ColorInput
                 value={draft.selectedBorderColor}
-                onChange={(v) => update('selectedBorderColor', v)}
+                onChange={(v) => update("selectedBorderColor", v)}
               />
             </FieldRow>
 
             <FieldRow label="Font weight">
               <select
                 value={draft.selectedFontWeight}
-                onChange={(e) => update('selectedFontWeight', Number(e.target.value))}
+                onChange={(e) =>
+                  update("selectedFontWeight", Number(e.target.value))
+                }
                 className="w-full rounded border border-border bg-white px-2 py-1 text-[11px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-300"
               >
                 {FONT_WEIGHT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
                 ))}
               </select>
             </FieldRow>
@@ -226,13 +284,13 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
           onClick={handleSave}
           disabled={saving}
           className={[
-            'rounded px-3 py-1.5 text-[11px] font-medium transition-colors',
+            "rounded px-3 py-1.5 text-[11px] font-medium transition-colors",
             saved
-              ? 'bg-green-600 text-white'
-              : 'bg-gray-900 text-white hover:bg-gray-700',
-          ].join(' ')}
+              ? "bg-green-600 text-white"
+              : "bg-gray-900 text-white hover:bg-gray-700",
+          ].join(" ")}
         >
-          {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
         </button>
       </div>
     </div>
@@ -241,7 +299,13 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] text-gray-500">{label}</span>
@@ -250,7 +314,13 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-function ColorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function ColorInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div className="flex items-center gap-2">
       <input
@@ -258,7 +328,7 @@ function ColorInput({ value, onChange }: { value: string; onChange: (v: string) 
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="h-6 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
-        style={{ appearance: 'none' }}
+        style={{ appearance: "none" }}
       />
       <input
         type="text"

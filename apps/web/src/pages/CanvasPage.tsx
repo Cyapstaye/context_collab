@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCanvasStore } from '../store/canvasStore';
+import { useLabelFilterStore } from '../store/labelFilterStore';
 import { usePageSocket } from '../hooks/usePageSocket';
 import LeftBar from '../components/layout/LeftBar';
 import CanvasArea from '../components/layout/CanvasArea';
@@ -11,12 +12,14 @@ export default function CanvasPage() {
   const loadPage = useCanvasStore((s) => s.loadPage);
   const loading = useCanvasStore((s) => s.loading);
   const loadError = useCanvasStore((s) => s.loadError);
+  const resetLabelFilter = useLabelFilterStore((s) => s.reset);
 
   useEffect(() => {
     if (projectId && pageId) {
+      resetLabelFilter();
       loadPage(projectId, pageId);
     }
-  }, [projectId, pageId, loadPage]);
+  }, [projectId, pageId, loadPage, resetLabelFilter]);
 
   // Connect to realtime room for this page
   usePageSocket(pageId ?? null);

@@ -63,7 +63,7 @@ export const EdgeSchema = z.object({
   pageId: z.string(),
   source: z.string(),
   target: z.string(),
-  weight: z.number().min(0).max(1).default(0.5),
+  weight: z.number().min(0.1).max(1.2).default(0.5),
   relation: z.string().default(''),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -72,12 +72,12 @@ export const EdgeSchema = z.object({
 export const CreateEdgeSchema = z.object({
   source: z.string(),
   target: z.string(),
-  weight: z.number().min(0).max(1).optional().default(0.5),
+  weight: z.number().min(0.1).max(1.2).optional().default(0.5),
   relation: z.string().optional().default(''),
 });
 
 export const UpdateEdgeSchema = z.object({
-  weight: z.number().min(0).max(1).optional(),
+  weight: z.number().min(0.1).max(1.2).optional(),
   relation: z.string().optional(),
 });
 

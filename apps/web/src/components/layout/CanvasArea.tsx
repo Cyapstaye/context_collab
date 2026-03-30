@@ -10,6 +10,9 @@ import FlowCanvas from '../canvas/FlowCanvas';
 import PresenceBar from '../canvas/PresenceBar';
 import RightBar from './RightBar';
 import AdminPanel from './AdminPanel';
+import ImportModal from './ImportModal';
+import ExportModal from './ExportModal';
+import LabelBar from './LabelBar';
 
 const ADMIN_EMAIL = 'livetobe@naver.com';
 
@@ -28,6 +31,8 @@ export default function CanvasArea() {
   const isAdmin = user?.email === ADMIN_EMAIL;
   const revertDesign = useDesignStore((s) => s.revert);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   function toggleAdminPanel() {
     if (adminPanelOpen) {
@@ -71,6 +76,20 @@ export default function CanvasArea() {
         {/* 3D axis — stub, hidden in v1 */}
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setExportModalOpen(true)}
+            className="rounded px-2.5 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            title="Export data"
+          >
+            Export
+          </button>
+          <button
+            onClick={() => setImportModalOpen(true)}
+            className="rounded px-2.5 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            title="Import data"
+          >
+            Import
+          </button>
           {isAdmin && (
             <button
               onClick={toggleAdminPanel}
@@ -89,9 +108,10 @@ export default function CanvasArea() {
         </div>
       </div>
 
-      {/* React Flow canvas + floating properties panel */}
+      {/* React Flow canvas + floating panels */}
       <div className="relative flex-1 overflow-hidden">
         <FlowCanvas activeView={activeView} />
+        <LabelBar />
         {adminPanelOpen
           ? <AdminPanel onClose={() => setAdminPanelOpen(false)} />
           : <RightBar />
@@ -125,6 +145,12 @@ export default function CanvasArea() {
           </button>
         </div>
       )}
+
+      {/* Export modal */}
+      {exportModalOpen && <ExportModal onClose={() => setExportModalOpen(false)} />}
+
+      {/* Import modal */}
+      {importModalOpen && <ImportModal onClose={() => setImportModalOpen(false)} />}
     </main>
   );
 }

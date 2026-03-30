@@ -1,13 +1,13 @@
 // ─── Core domain types ───────────────────────────────────────────────────────
 
-export type NodeType = 'element' | 'proposition';
+export type NodeType = "element" | "proposition";
 
 export interface LabelDef {
   name: string;
   color: string; // hex color string, e.g. '#ff5500', or '' for unset
 }
 
-export type ViewName = 'element' | 'proposition' | 'layer' | 'axis3d';
+export type ViewName = "element" | "proposition" | "layer" | "axis3d";
 
 export interface NodePositions {
   element: { x: number; y: number } | null;
@@ -43,7 +43,7 @@ export interface Page {
   id: string;
   projectId: string;
   name: string;
-  labels: LabelDef[];  // page-level label vocabulary (name + color)
+  labels: LabelDef[]; // page-level label vocabulary (name + color)
   relations: string[]; // page-level relation pool (used on edges)
   order: number;
   createdAt: string;
@@ -61,23 +61,27 @@ export interface Project {
 export interface User {
   id: string;
   email: string;
-  role: 'admin' | 'editor' | 'viewer';
+  role: "admin" | "editor" | "viewer";
   createdAt: string;
 }
 
 // ─── Design settings ─────────────────────────────────────────────────────────
 
 export interface NodeStyleSettings {
-  defaultBorderWidth: number;   // px, e.g. 1
-  defaultBorderColor: string;   // hex, e.g. '#374151'
-  defaultFontWeight: number;    // e.g. 400
-  selectedBorderWidth: number;  // px, e.g. 2
-  selectedBorderColor: string;  // hex, e.g. '#374151'
-  selectedFontWeight: number;   // e.g. 600
+  defaultBorderWidth: number; // px, e.g. 1
+  defaultBorderColor: string; // hex, e.g. '#374151'
+  defaultFontWeight: number; // e.g. 400
+  selectedBorderWidth: number; // px, e.g. 2
+  selectedBorderColor: string; // hex, e.g. '#374151'
+  selectedFontWeight: number; // e.g. 600
   // Label dot arc (element node)
-  arcGap: number;        // px gap between node edge and dot inner edge, e.g. 10
-  arcDotSize: number;    // dot diameter in px, e.g. 8
-  arcAngleStep: number;  // degrees between adjacent dots, e.g. 18
+  arcGap: number; // px gap between node edge and dot inner edge, e.g. 10
+  arcDotSize: number; // dot diameter in px, e.g. 8
+  arcAngleStep: number; // degrees between adjacent dots, e.g. 18
+  // Edge glyphs
+  edgeFontSize: number; // base font size for edge glyph characters, e.g. 11
+  // Edge opacity
+  edgeOpacity: number;  // global opacity multiplier for all connections, 0–1, e.g. 1
 }
 
 // ─── API response shapes ──────────────────────────────────────────────────────

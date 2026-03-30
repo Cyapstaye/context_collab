@@ -13,3 +13,11 @@ body,
   margin: 0;
   padding: 0;
 }
+
+/* Prevent SVG edge glyphs from being text-selectable */
+.react-flow__edges text,
+.react-flow__edge text {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}

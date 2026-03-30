@@ -74,6 +74,9 @@ interface CanvasStore {
   editingNodeId: string | null;
   setEditingNodeId: (id: string | null) => void;
 
+  viewportCenter: { x: number; y: number };
+  setViewportCenter: (pos: { x: number; y: number }) => void;
+
   setActiveView: (view: ViewName) => void;
   setSelectedNode: (id: string | null) => void;
   setSelectedEdge: (id: string | null) => void;
@@ -110,11 +113,15 @@ const defaultPositions = (): NodePositions => ({
 function buildInitialPositions(
   type: NodeType,
   existingNodesOfType: number,
+  viewportCenter: { x: number; y: number },
   position?: { x: number; y: number },
 ): NodePositions {
+  // Scatter new nodes in a small grid around the viewport center so they
+  // don't all stack on top of each other.
   const col = existingNodesOfType % 6;
   const row = Math.floor(existingNodesOfType / 6);
-  const pos = position ?? { x: 120 + col * 200, y: 100 + row * 160 };
+  const offset = { x: (col - 2.5) * 50, y: (row - 0.5) * 60 };
+  const pos = position ?? { x: viewportCenter.x + offset.x, y: viewportCenter.y + offset.y };
   const positions = defaultPositions();
   positions[type === 'element' ? 'element' : 'proposition'] = pos;
   if (type === 'element') {
@@ -152,6 +159,9 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   mutationError: null,
   undoStack: [],
   _isUndoing: false,
+  viewportCenter: { x: 400, y: 300 },
+
+  setViewportCenter: (pos) => set({ viewportCenter: pos }),
 
   // ── Undo ────────────────────────────────────────────────────────────────────
   undo: () => {
@@ -246,10 +256,10 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   clearMutationError: () => set({ mutationError: null }),
 
   addNode: async (type, name, position?) => {
-    const { pageId, nodes } = get();
+    const { pageId, nodes, viewportCenter } = get();
     if (!pageId) return;
     const existingOfType = nodes.filter((n) => n.type === type).length;
-    const positions = buildInitialPositions(type, existingOfType, position);
+    const positions = buildInitialPositions(type, existingOfType, viewportCenter, position);
     try {
       const res = await api.createNode(pageId, { type, name, positions });
       const node: CanvasNode = {
@@ -266,7 +276,9 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
         }));
       }
       set((s) => ({
-        nodes: [...s.nodes, node],
+        nodes: s.nodes.some((n) => n.id === node.id)
+          ? s.nodes
+          : [...s.nodes, node],
         selectedNodeId: node.id,
         selectedEdgeId: null,
       }));

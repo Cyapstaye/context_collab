@@ -6,6 +6,8 @@ import { useCanvasStore } from '../../store/canvasStore';
 import { useRealtimeStore } from '../../store/realtimeStore';
 import { useAuthStore } from '../../store/authStore';
 import type { LabelDef } from '@context-collab/shared';
+import { parseRelation, encodeRelation } from '../../lib/connectionTypes';
+import type { ConnType, ConnDir } from '../../lib/connectionTypes';
 
 // ── Color picker popover ───────────────────────────────────────────────────────
 
@@ -353,13 +355,140 @@ function RelationCombobox({ value, suggestions, disabled, onChange, onNewRelatio
   );
 }
 
+// ── ConnectionTypePicker ───────────────────────────────────────────────────────
+
+const CONN_TYPES: { value: ConnType; label: string; svg: React.ReactNode }[] = [
+  {
+    value: '',
+    label: 'None',
+    svg: (
+      <svg width="24" height="10" viewBox="0 0 24 10">
+        <line x1="2" y1="5" x2="22" y2="5" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    ),
+  },
+  {
+    value: 'positive',
+    label: 'Positive',
+    svg: (
+      <svg width="24" height="10" viewBox="0 0 24 10">
+        <line x1="2" y1="5" x2="17" y2="5" stroke="currentColor" strokeWidth="1.5" />
+        <polygon points="17,2 23,5 17,8" fill="currentColor" />
+      </svg>
+    ),
+  },
+  {
+    value: 'negative',
+    label: 'Negative',
+    svg: (
+      <svg width="24" height="10" viewBox="0 0 24 10">
+        <line x1="4"  y1="9" x2="8"  y2="1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="10" y1="9" x2="14" y2="1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <line x1="16" y1="9" x2="20" y2="1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    value: 'resonate',
+    label: 'Resonate',
+    svg: (
+      <svg width="24" height="10" viewBox="0 0 24 10">
+        <polygon points="7,2 1,5 7,8" fill="currentColor" />
+        <line x1="7" y1="5" x2="17" y2="5" stroke="currentColor" strokeWidth="1.5" />
+        <polygon points="17,2 23,5 17,8" fill="currentColor" />
+      </svg>
+    ),
+  },
+  {
+    value: 'offset',
+    label: 'Offset',
+    svg: (
+      <svg width="24" height="10" viewBox="0 0 24 10">
+        <polyline points="7,2 1,5 7,8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <line x1="7" y1="5" x2="17" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2" />
+        <polyline points="17,2 23,5 17,8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    ),
+  },
+];
+
+const DIRECTIONS: { value: ConnDir; label: string }[] = [
+  { value: 'forward',  label: '→' },
+  { value: 'backward', label: '←' },
+  { value: 'both',     label: '↔' },
+];
+
+function ConnectionTypePicker({
+  relation,
+  disabled,
+  onChange,
+}: {
+  relation: string;
+  disabled?: boolean;
+  onChange: (relation: string) => void;
+}) {
+  const { type, dir } = parseRelation(relation);
+  const hasDir = type === 'positive' || type === 'negative';
+
+  function setType(t: ConnType) {
+    const newDir = hasDir ? dir : 'forward';
+    onChange(encodeRelation(t, newDir));
+  }
+
+  function setDir(d: ConnDir) {
+    onChange(encodeRelation(type, d));
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1">
+        {CONN_TYPES.map((t) => (
+          <button
+            key={t.value}
+            disabled={disabled}
+            onClick={() => setType(t.value)}
+            className={[
+              'flex flex-col items-center gap-1 rounded border px-2 py-1.5 text-[10px] leading-none transition-colors',
+              type === t.value
+                ? 'border-gray-400 bg-gray-100 text-gray-800'
+                : 'border-border text-gray-400 hover:bg-gray-50 hover:text-gray-700',
+            ].join(' ')}
+          >
+            {t.svg}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {hasDir && (
+        <div className="flex gap-1">
+          {DIRECTIONS.map((d) => (
+            <button
+              key={d.value}
+              disabled={disabled}
+              onClick={() => setDir(d.value)}
+              className={[
+                'rounded border px-3 py-0.5 text-sm transition-colors',
+                dir === d.value
+                  ? 'border-gray-400 bg-gray-100 text-gray-800'
+                  : 'border-border text-gray-400 hover:bg-gray-50',
+              ].join(' ')}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── RightBar ──────────────────────────────────────────────────────────────────
 
 export default function RightBar() {
   const nodes = useCanvasStore((s) => s.nodes);
   const edges = useCanvasStore((s) => s.edges);
   const pageLabels = useCanvasStore((s) => s.pageLabels);
-  const pageRelations = useCanvasStore((s) => s.pageRelations);
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId);
   const selectedEdgeId = useCanvasStore((s) => s.selectedEdgeId);
   const updateNodeName = useCanvasStore((s) => s.updateNodeName);
@@ -370,7 +499,6 @@ export default function RightBar() {
   const updateEdgeRelation = useCanvasStore((s) => s.updateEdgeRelation);
   const deleteEdge = useCanvasStore((s) => s.deleteEdge);
   const addPageLabel = useCanvasStore((s) => s.addPageLabel);
-  const addPageRelation = useCanvasStore((s) => s.addPageRelation);
 
   const nodeLocks = useRealtimeStore((s) => s.nodeLocks);
   const presenceUsers = useRealtimeStore((s) => s.presenceUsers);
@@ -512,8 +640,8 @@ export default function RightBar() {
             <span className="text-xs text-gray-500">Weight — {selectedEdge.weight.toFixed(2)}</span>
             <input
               type="range"
-              min="0"
-              max="1"
+              min="0.1"
+              max="1.2"
               step="0.05"
               className="mt-1 w-full"
               value={selectedEdge.weight}
@@ -523,13 +651,11 @@ export default function RightBar() {
           </label>
 
           <div>
-            <span className="text-xs text-gray-500 block mb-1">Relation</span>
-            <RelationCombobox
-              value={selectedEdge.relation}
-              suggestions={pageRelations}
+            <span className="text-xs text-gray-500 block mb-1">Connection type</span>
+            <ConnectionTypePicker
+              relation={selectedEdge.relation}
               disabled={isViewOnly}
               onChange={(relation) => updateEdgeRelation(selectedEdge.id, relation)}
-              onNewRelation={(relation) => addPageRelation(relation)}
             />
           </div>
         </div>

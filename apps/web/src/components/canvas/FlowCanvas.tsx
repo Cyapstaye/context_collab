@@ -3,21 +3,24 @@ import {
   ReactFlow,
   Background,
   Controls,
+  ControlButton,
   MiniMap,
   BackgroundVariant,
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
 import type {
-  Connection,
   NodeChange,
   EdgeChange,
   Node as RFNode,
   Edge as RFEdge,
+  Viewport,
+  ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { useCanvasStore } from '../../store/canvasStore';
+import { useLabelFilterStore } from '../../store/labelFilterStore';
 import type { LabelDef } from '@context-collab/shared';
 import { useRealtimeStore } from '../../store/realtimeStore';
 import { useAuthStore } from '../../store/authStore';
@@ -25,7 +28,10 @@ import { getSocket, getUserIdentity } from '../../lib/socket';
 import { SOCKET_EVENTS } from '@context-collab/shared';
 import { nodeTypes } from './nodeTypes';
 import type { NodeData } from './nodeTypes';
+import { connEdgeTypes } from './edgeTypes';
 import type { ViewName } from '@context-collab/shared';
+import { useForceLayout } from '../../hooks/useForceLayout';
+import { edgeVisualProps } from '../../lib/connectionTypes';
 
 interface Props {
   activeView: ViewName;
@@ -111,10 +117,17 @@ export default function FlowCanvas({ activeView }: Props) {
   const setEditingNodeId = useCanvasStore((s) => s.setEditingNodeId);
   const undo = useCanvasStore((s) => s.undo);
 
+  const setViewportCenter = useCanvasStore((s) => s.setViewportCenter);
+
   const nodeLocks = useRealtimeStore((s) => s.nodeLocks);
   const presenceUsers = useRealtimeStore((s) => s.presenceUsers);
 
   const isViewOnly = useAuthStore((s) => s.isViewOnly());
+
+  const hiddenLabels  = useLabelFilterStore((s) => s.hiddenLabels);
+  const focusedLabel  = useLabelFilterStore((s) => s.focusedLabel);
+
+  const [showNameOverlay, setShowNameOverlay] = useState(false);
 
   // ── Option-click waypoint chain ──────────────────────────────────────────
   // Holds the node ID of the last Option+clicked node. Each subsequent
@@ -157,6 +170,11 @@ export default function FlowCanvas({ activeView }: Props) {
     // Primary nodes: filtered by current view type
     const primary = storeNodes
       .filter((n) => visibleNodeTypes.includes(n.type as 'element' | 'proposition'))
+      // Hide nodes that carry any hidden label
+      .filter((n) => {
+        if (hiddenLabels.size === 0) return true;
+        return !n.labels.some((lbl) => hiddenLabels.has(lbl));
+      })
       .map((n) => {
         const pos =
           n.positions[activeView] ??
@@ -175,14 +193,23 @@ export default function FlowCanvas({ activeView }: Props) {
           .map((name) => pageLabels.find((l: LabelDef) => l.name === name)?.color ?? '')
           .filter((c) => c !== '');
 
+        // Label focus: nodes with the focused label glow; all others are dimmed
+        const hasFocusedLabel = focusedLabel !== null && n.labels.includes(focusedLabel);
+        const labelFocusColor = hasFocusedLabel
+          ? (pageLabels.find((l: LabelDef) => l.name === focusedLabel)?.color || '#6b7280')
+          : undefined;
+        const labelDimmed = focusedLabel !== null && !hasFocusedLabel;
+
         const data: NodeData = {
           name: n.name,
           size: n.size,
-          dimmed,
+          dimmed: dimmed || labelDimmed,
           lockedBy: isLockedByOther ? lockedByUserId : undefined,
           lockedColor: lockerUser?.color,
           labelColors: labelColors.length > 0 ? labelColors : undefined,
           isWaypoint: n.id === waypointId,
+          labelFocusColor,
+          showNameOverlay,
         };
 
         return {
@@ -192,6 +219,7 @@ export default function FlowCanvas({ activeView }: Props) {
           data,
           selected: n.id === selectedNodeId,
           draggable: !isViewOnly && !isLockedByOther,
+          zIndex: 0,
         };
       });
 
@@ -218,12 +246,13 @@ export default function FlowCanvas({ activeView }: Props) {
           position: pos,
           data,
           selected: false,
-          draggable: false, // Cross-type context nodes are display-only
+          draggable: false,
+          zIndex: 0,
         };
       });
 
     return [...primary, ...cross];
-  }, [storeNodes, activeView, visibleNodeTypes, selectedNodeId, connectedIds, crossTypeConnectedNodes, nodeLocks, presenceUsers, isViewOnly, identity.userId, pageLabels, waypointId]);
+  }, [storeNodes, activeView, visibleNodeTypes, selectedNodeId, connectedIds, crossTypeConnectedNodes, nodeLocks, presenceUsers, isViewOnly, identity.userId, pageLabels, waypointId, hiddenLabels, focusedLabel, showNameOverlay]);
 
   // Derive RF-format edges (between visible nodes including cross-type context)
   const derivedEdges = useMemo((): RFEdge[] => {
@@ -232,19 +261,33 @@ export default function FlowCanvas({ activeView }: Props) {
       .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
       .map((e) => ({
         id: e.id,
-        type: 'straight',
+        type: 'conn',
         source: e.source,
         target: e.target,
-        label: e.relation || undefined,
-        style: { opacity: e.weight, strokeWidth: 1.5 },
         selected: e.id === selectedEdgeId,
         data: { weight: e.weight, relation: e.relation },
+        ...edgeVisualProps(e.relation, e.weight),
       }));
   }, [storeEdges, derivedNodes, selectedEdgeId]);
+
+  // Edges for the force simulation (only between currently visible nodes)
+  const visibleIds = useMemo(() => new Set(derivedNodes.map((n) => n.id)), [derivedNodes]);
+  const simEdges = useMemo(
+    () =>
+      storeEdges
+        .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+        .map((e) => ({ source: e.source, target: e.target, weight: e.weight })),
+    [storeEdges, visibleIds],
+  );
 
   // Internal RF state
   const [nodes, setNodes] = useState<RFNode[]>(derivedNodes);
   const [edges, setEdges] = useState<RFEdge[]>(derivedEdges);
+
+  // Force-directed layout simulation
+  const { pin, unpin } = useForceLayout(simEdges, setNodes);
+
+  const labelFilterKey = `${focusedLabel ?? ''}|${[...hiddenLabels].sort().join(',')}|${showNameOverlay}`;
 
   const nodeIdentityKey = storeNodes
     .filter((n) => visibleNodeTypes.includes(n.type as 'element' | 'proposition'))
@@ -260,10 +303,26 @@ export default function FlowCanvas({ activeView }: Props) {
   // Cross-type context key — resync when selection or cross-type connections change
   const crossTypeKey = crossTypeConnectedNodes.map((n) => n.id).join('|');
 
+  // Track view changes so we know when to fully reset positions vs. just update metadata
+  const prevViewRef = useRef(activeView);
+
   useEffect(() => {
-    setNodes(derivedNodes);
+    const viewChanged = prevViewRef.current !== activeView;
+    prevViewRef.current = activeView;
+
+    setNodes((current) => {
+      // On view switch, reset to stored positions for the new view
+      if (viewChanged) return derivedNodes;
+      // Otherwise preserve each node's current simulation position so the
+      // physics don't restart from scratch (e.g. after a size change)
+      const posMap = new Map(current.map((n) => [n.id, n.position]));
+      return derivedNodes.map((n) => ({
+        ...n,
+        position: posMap.get(n.id) ?? n.position,
+      }));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, nodeIdentityKey, lockKey, isViewOnly, selectedNodeId, crossTypeKey, waypointId]);
+  }, [activeView, nodeIdentityKey, lockKey, isViewOnly, selectedNodeId, crossTypeKey, waypointId, labelFilterKey]);
 
   useEffect(() => {
     setEdges(derivedEdges);
@@ -293,10 +352,18 @@ export default function FlowCanvas({ activeView }: Props) {
     setEdges((eds) => applyEdgeChanges(changes, eds));
   }, []);
 
+  const onNodeDragStart = useCallback(
+    (_e: React.MouseEvent, node: RFNode) => {
+      pin(node.id);
+    },
+    [pin],
+  );
+
   const onNodeDragStop = useCallback(
     (_e: React.MouseEvent, node: RFNode) => {
       if (isViewOnly) return;
       updateNodePosition(node.id, activeView, node.position);
+      unpin(node.id);
       // Reset lock timeout — user actively dragged the node
       if (pageId) {
         const socket = getSocket();
@@ -309,18 +376,9 @@ export default function FlowCanvas({ activeView }: Props) {
         }
       }
     },
-    [updateNodePosition, activeView, pageId, isViewOnly],
+    [updateNodePosition, activeView, pageId, isViewOnly, unpin],
   );
 
-  const onConnect = useCallback(
-    (params: Connection) => {
-      if (isViewOnly) return;
-      if (params.source && params.target) {
-        storeAddEdge(params.source, params.target);
-      }
-    },
-    [storeAddEdge, isViewOnly],
-  );
 
   const onNodeClick = useCallback(
     (e: React.MouseEvent, node: RFNode) => {
@@ -359,6 +417,29 @@ export default function FlowCanvas({ activeView }: Props) {
     setSelectedEdge(null);
     setWaypointId(null);
   }, [setSelectedNode, setSelectedEdge]);
+
+  // ── Viewport center tracking ───────────────────────────────────────────────
+  const computeCenter = useCallback(
+    (vp: Viewport) => {
+      if (!canvasRef.current) return;
+      const { clientWidth, clientHeight } = canvasRef.current;
+      setViewportCenter({
+        x: (clientWidth / 2 - vp.x) / vp.zoom,
+        y: (clientHeight / 2 - vp.y) / vp.zoom,
+      });
+    },
+    [setViewportCenter],
+  );
+
+  const onMove = useCallback(
+    (_e: MouseEvent | TouchEvent | null, vp: Viewport) => computeCenter(vp),
+    [computeCenter],
+  );
+
+  const onInit = useCallback(
+    (instance: ReactFlowInstance) => computeCenter(instance.getViewport()),
+    [computeCenter],
+  );
 
   // ── cmd+Z undo / Escape to cancel waypoint chain ─────────────────────────
   useEffect(() => {
@@ -417,22 +498,44 @@ export default function FlowCanvas({ activeView }: Props) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={isViewOnly ? undefined : onConnect}
+        onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
+        onMove={onMove}
+        onInit={onInit}
         nodeTypes={nodeTypes}
+        edgeTypes={connEdgeTypes}
         nodesDraggable={!isViewOnly}
-        nodesConnectable={!isViewOnly}
+        nodesConnectable={false}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         className="bg-[#f8f8f6]"
-        defaultEdgeOptions={{ type: 'straight' }}
+        defaultEdgeOptions={{ type: 'conn' }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e0e0e0" />
-        <Controls />
+        <Controls>
+          <ControlButton
+            onClick={() => setShowNameOverlay((v) => !v)}
+            title={showNameOverlay ? 'Hide names' : 'Show names'}
+            style={{ color: showNameOverlay ? '#111' : undefined }}
+          >
+            {/* Icon: dot only (off) vs dot + floating text lines (on) */}
+            {showNameOverlay ? (
+              <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
+                <circle cx="4" cy="6" r="3" fill="currentColor" />
+                <line x1="9" y1="4" x2="13" y2="4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                <line x1="9" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <circle cx="6" cy="6" r="3" fill="currentColor" />
+              </svg>
+            )}
+          </ControlButton>
+        </Controls>
         <MiniMap zoomable pannable />
       </ReactFlow>
     </div>
